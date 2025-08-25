@@ -27,7 +27,7 @@ class LoginError extends Error {
  * @access Public
  * @rateLimit 5 attempts per 15 minutes per IP+email combination
  */
-router.post('/login', [
+router.post('/', [
   loginRateLimit(),
   sanitizeRequest()
 ], async (req, res) => {

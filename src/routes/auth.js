@@ -33,8 +33,8 @@ router.use(sanitizeRequest());
 // Use registration routes - this includes /register, /verify-email, /resend-verification, etc.
 router.use('/', registrationRoutes);
 
-// Use login routes - this includes /login, /logout
-router.use('/', loginRoutes);
+// Use login routes - mount at /login to avoid conflicts
+router.use('/login', loginRoutes);
 
 // Use password reset routes - this includes /password-reset/request, /password-reset/verify, /password-reset/complete
 router.use('/password-reset', passwordResetRoutes);
