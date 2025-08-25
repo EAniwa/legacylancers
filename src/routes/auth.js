@@ -7,10 +7,8 @@ const express = require('express');
 const router = express.Router();
 
 const { 
-  login, 
   refreshToken, 
-  getProfile, 
-  logout 
+  getProfile 
 } = require('../controllers/auth');
 
 const { 
@@ -19,12 +17,15 @@ const {
 } = require('../middleware/auth');
 
 const { 
-  loginRateLimit, 
   sanitizeRequest 
 } = require('../middleware/security');
 
 // Import registration routes
 const registrationRoutes = require('./auth/register');
+// Import login routes
+const loginRoutes = require('./auth/login');
+// Import password reset routes
+const passwordResetRoutes = require('./auth/password-reset');
 
 // Apply request sanitization to all auth routes
 router.use(sanitizeRequest());
@@ -32,12 +33,12 @@ router.use(sanitizeRequest());
 // Use registration routes - this includes /register, /verify-email, /resend-verification, etc.
 router.use('/', registrationRoutes);
 
-/**
- * @route POST /api/auth/login
- * @desc Login user
- * @access Public
- */
-router.post('/login', loginRateLimit(), login);
+// Use login routes - this includes /login, /logout
+router.use('/', loginRoutes);
+
+// Use password reset routes - this includes /password-reset/request, /password-reset/verify, /password-reset/complete
+router.use('/password-reset', passwordResetRoutes);
+
 
 /**
  * @route POST /api/auth/refresh
@@ -59,15 +60,6 @@ router.get('/profile', [
   requireTokenType('access')
 ], getProfile);
 
-/**
- * @route POST /api/auth/logout
- * @desc Logout user
- * @access Private (requires access token)
- */
-router.post('/logout', [
-  requiredAuthenticate,
-  requireTokenType('access')
-], logout);
 
 // Health check endpoint
 router.get('/health', (req, res) => {

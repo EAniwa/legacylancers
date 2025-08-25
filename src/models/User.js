@@ -520,6 +520,40 @@ class User {
   }
 
   /**
+   * Update user password hash (for password reset)
+   * @param {string} userId - User ID
+   * @param {string} newPasswordHash - New password hash
+   * @returns {Promise<Object>} Updated user object
+   */
+  async updatePasswordHash(userId, newPasswordHash) {
+    try {
+      const user = this.users.get(userId);
+      if (!user || user.deletedAt) {
+        throw new UserError('User not found', 'USER_NOT_FOUND');
+      }
+
+      // Update password hash and timestamp
+      const updatedUser = {
+        ...user,
+        passwordHash: newPasswordHash,
+        updatedAt: new Date()
+      };
+
+      this.users.set(userId, updatedUser);
+
+      // Return user without password hash
+      const { passwordHash: _, ...userResponse } = updatedUser;
+      return userResponse;
+
+    } catch (error) {
+      if (error instanceof UserError) {
+        throw error;
+      }
+      throw new UserError(`Failed to update password: ${error.message}`, 'PASSWORD_UPDATE_FAILED');
+    }
+  }
+
+  /**
    * Reset all data (for testing)
    * @returns {Promise<void>}
    */
