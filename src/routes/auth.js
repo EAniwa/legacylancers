@@ -7,7 +7,6 @@ const express = require('express');
 const router = express.Router();
 
 const { 
-  register, 
   login, 
   refreshToken, 
   getProfile, 
@@ -21,19 +20,17 @@ const {
 
 const { 
   loginRateLimit, 
-  registrationRateLimit,
   sanitizeRequest 
 } = require('../middleware/security');
+
+// Import registration routes
+const registrationRoutes = require('./auth/register');
 
 // Apply request sanitization to all auth routes
 router.use(sanitizeRequest());
 
-/**
- * @route POST /api/auth/register
- * @desc Register a new user
- * @access Public
- */
-router.post('/register', registrationRateLimit(), register);
+// Use registration routes - this includes /register, /verify-email, /resend-verification, etc.
+router.use('/', registrationRoutes);
 
 /**
  * @route POST /api/auth/login

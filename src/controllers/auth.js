@@ -5,6 +5,7 @@
 
 const { hashPassword, verifyPassword } = require('../auth/password');
 const { generateTokenPair } = require('../auth/jwt');
+const { User, UserError } = require('../models/User');
 const validator = require('validator');
 
 class AuthError extends Error {
@@ -16,84 +17,7 @@ class AuthError extends Error {
   }
 }
 
-/**
- * Register a new user
- */
-async function register(req, res) {
-  try {
-    const { email, password, firstName, lastName } = req.body;
-
-    // Validate required fields
-    if (!email || !password || !firstName || !lastName) {
-      throw new AuthError('All fields are required', 400, 'MISSING_FIELDS');
-    }
-
-    // Validate email format
-    if (!validator.isEmail(email)) {
-      throw new AuthError('Invalid email format', 400, 'INVALID_EMAIL');
-    }
-
-    // Normalize email
-    const normalizedEmail = validator.normalizeEmail(email);
-
-    // Check if user already exists (this would typically check the database)
-    // For now, we'll simulate this check
-    // TODO: Implement database check when database layer is available
-
-    // Hash password
-    const hashedPassword = await hashPassword(password);
-
-    // Create user object (this would typically save to database)
-    const user = {
-      id: generateUserId(),
-      email: normalizedEmail,
-      firstName: validator.escape(firstName.trim()),
-      lastName: validator.escape(lastName.trim()),
-      hashedPassword,
-      emailVerified: false,
-      kycStatus: 'pending',
-      role: 'user',
-      createdAt: new Date().toISOString()
-    };
-
-    // Generate tokens
-    const tokens = generateTokenPair({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      emailVerified: user.emailVerified,
-      kycStatus: user.kycStatus
-    });
-
-    // Remove sensitive data from response
-    const { hashedPassword: _, ...userResponse } = user;
-
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-      data: {
-        user: userResponse,
-        ...tokens
-      }
-    });
-
-  } catch (error) {
-    if (error instanceof AuthError) {
-      res.status(error.statusCode).json({
-        success: false,
-        error: error.message,
-        code: error.code
-      });
-    } else {
-      console.error('Registration error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Registration failed',
-        code: 'REGISTRATION_ERROR'
-      });
-    }
-  }
-}
+// Registration is now handled by /routes/auth/register.js
 
 /**
  * Login user
@@ -115,17 +39,20 @@ async function login(req, res) {
     // Normalize email
     const normalizedEmail = validator.normalizeEmail(email);
 
-    // Find user by email (this would typically query the database)
-    // For now, we'll simulate this
-    // TODO: Implement database query when database layer is available
-    const user = await findUserByEmail(normalizedEmail);
+    // Find user by email
+    const user = await User.findByEmailWithPassword(normalizedEmail);
 
     if (!user) {
       throw new AuthError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
     }
 
+    // Check if email is verified
+    if (!user.emailVerified) {
+      throw new AuthError('Please verify your email address to continue', 401, 'EMAIL_NOT_VERIFIED');
+    }
+
     // Verify password
-    const isValidPassword = await verifyPassword(password, user.hashedPassword);
+    const isValidPassword = await verifyPassword(password, user.passwordHash);
 
     if (!isValidPassword) {
       throw new AuthError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
@@ -141,7 +68,7 @@ async function login(req, res) {
     });
 
     // Remove sensitive data from response
-    const { hashedPassword: _, ...userResponse } = user;
+    const { passwordHash: _, ...userResponse } = user;
 
     res.json({
       success: true,
@@ -226,15 +153,14 @@ async function getProfile(req, res) {
     }
 
     // Fetch full user profile from database
-    // TODO: Implement database query when database layer is available
-    const user = await findUserById(req.user.id);
+    const user = await User.findById(req.user.userId);
 
     if (!user) {
       throw new AuthError('User not found', 404, 'USER_NOT_FOUND');
     }
 
-    // Remove sensitive data from response
-    const { hashedPassword: _, ...userResponse } = user;
+    // User data is already sanitized by the User model (no password hash included)
+    const userResponse = user;
 
     res.json({
       success: true,
@@ -287,48 +213,9 @@ async function logout(req, res) {
   }
 }
 
-// Helper functions (would be moved to a service layer in a real application)
-
-/**
- * Generate a unique user ID
- * TODO: Replace with proper ID generation (UUID, etc.)
- */
-function generateUserId() {
-  return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-}
-
-/**
- * Mock function to find user by email
- * TODO: Replace with actual database query
- */
-async function findUserByEmail(email) {
-  // This would typically query the database
-  // For now, returning null to simulate user not found
-  return null;
-}
-
-/**
- * Mock function to find user by ID
- * TODO: Replace with actual database query
- */
-async function findUserById(id) {
-  // This would typically query the database
-  // For now, returning a mock user
-  return {
-    id,
-    email: 'user@example.com',
-    firstName: 'John',
-    lastName: 'Doe',
-    hashedPassword: 'hashed_password_here',
-    emailVerified: false,
-    kycStatus: 'pending',
-    role: 'user',
-    createdAt: '2023-01-01T00:00:00Z'
-  };
-}
+// Helper functions are now handled by the User model
 
 module.exports = {
-  register,
   login,
   refreshToken,
   getProfile,
