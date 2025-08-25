@@ -314,7 +314,7 @@ describe('Login Routes', () => {
   describe('POST /api/auth/logout', () => {
     it('should logout successfully without token', async () => {
       const response = await request(app)
-        .post('/api/auth/logout')
+        .post('/api/auth/login/logout')
         .expect(200);
 
       expect(response.body).toMatchObject({
@@ -337,7 +337,7 @@ describe('Login Routes', () => {
 
       // Then logout with the token
       const response = await request(app)
-        .post('/api/auth/logout')
+        .post('/api/auth/login/logout')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
@@ -353,7 +353,7 @@ describe('Login Routes', () => {
       console.error = jest.fn();
 
       const response = await request(app)
-        .post('/api/auth/logout')
+        .post('/api/auth/login/logout')
         .expect(200);
 
       expect(response.body.success).toBe(true);
