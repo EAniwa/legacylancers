@@ -116,6 +116,7 @@ class User {
         role: 'user',
         oauthProvider: null,
         oauthId: null,
+        oauthProfiles: [], // Array to store multiple OAuth profiles
         kycStatus: 'pending',
         kycVerifiedAt: null,
         privacyConsent,
@@ -550,6 +551,446 @@ class User {
         throw error;
       }
       throw new UserError(`Failed to update password: ${error.message}`, 'PASSWORD_UPDATE_FAILED');
+    }
+  }
+
+  /**
+   * Find user by OAuth provider and provider ID
+   * @param {string} provider - OAuth provider (e.g., 'linkedin')
+   * @param {string} providerId - Provider-specific user ID
+   * @returns {Promise<Object|null>} User object or null if not found
+   */
+  async findByOAuthProvider(provider, providerId) {
+    try {
+      if (!provider) {
+        throw new UserError('OAuth provider is required', 'MISSING_PROVIDER');
+      }
+
+      if (!providerId) {
+        throw new UserError('OAuth provider ID is required', 'MISSING_PROVIDER_ID');
+      }
+
+      for (const user of this.users.values()) {
+        if (user.deletedAt) continue;
+
+        // Check primary OAuth provider (legacy compatibility)
+        if (user.oauthProvider === provider && user.oauthId === providerId) {
+          const { passwordHash: _, ...userResponse } = user;
+          return userResponse;
+        }
+
+        // Check OAuth profiles array
+        if (user.oauthProfiles && user.oauthProfiles.length > 0) {
+          const hasProfile = user.oauthProfiles.some(profile => 
+            profile.provider === provider && profile.providerId === providerId
+          );
+          
+          if (hasProfile) {
+            const { passwordHash: _, ...userResponse } = user;
+            return userResponse;
+          }
+        }
+      }
+
+      return null;
+    } catch (error) {
+      if (error instanceof UserError) {
+        throw error;
+      }
+      throw new UserError(`Failed to find user by OAuth provider: ${error.message}`, 'OAUTH_FIND_FAILED');
+    }
+  }
+
+  /**
+   * Create user from OAuth profile
+   * @param {string} provider - OAuth provider
+   * @param {Object} oauthProfile - OAuth profile data
+   * @param {Object} options - Creation options
+   * @returns {Promise<Object>} Created user object
+   */
+  async createFromOAuth(provider, oauthProfile, options = {}) {
+    try {
+      if (!provider) {
+        throw new UserError('OAuth provider is required', 'MISSING_PROVIDER');
+      }
+
+      if (!oauthProfile) {
+        throw new UserError('OAuth profile is required', 'MISSING_OAUTH_PROFILE');
+      }
+
+      if (!oauthProfile.email) {
+        throw new UserError('Email is required in OAuth profile', 'MISSING_EMAIL');
+      }
+
+      if (!oauthProfile.id) {
+        throw new UserError('Provider ID is required in OAuth profile', 'MISSING_PROVIDER_ID');
+      }
+
+      // Validate email format
+      if (!validator.isEmail(oauthProfile.email)) {
+        throw new UserError('Invalid email format in OAuth profile', 'INVALID_EMAIL');
+      }
+
+      // Normalize email
+      const normalizedEmail = validator.normalizeEmail(oauthProfile.email, {
+        all_lowercase: true,
+        gmail_remove_dots: false
+      });
+
+      // Check if user already exists with this email
+      const existingUser = await this.findByEmail(normalizedEmail);
+      if (existingUser) {
+        throw new UserError('User with this email already exists', 'USER_EXISTS');
+      }
+
+      // Check if OAuth profile is already linked
+      const existingOAuthUser = await this.findByOAuthProvider(provider, oauthProfile.id);
+      if (existingOAuthUser) {
+        throw new UserError('OAuth profile is already linked to another account', 'OAUTH_PROFILE_EXISTS');
+      }
+
+      // Create user object
+      const userId = uuidv4();
+      const now = new Date();
+
+      // Sanitize names from OAuth profile
+      const firstName = oauthProfile.firstName ? this.sanitizeName(oauthProfile.firstName) : '';
+      const lastName = oauthProfile.lastName ? this.sanitizeName(oauthProfile.lastName) : '';
+
+      // Create OAuth profile object
+      const oauthProfileData = {
+        provider,
+        providerId: oauthProfile.id,
+        email: normalizedEmail,
+        firstName,
+        lastName,
+        profilePicture: oauthProfile.profilePicture || null,
+        headline: oauthProfile.headline || null,
+        profileURL: oauthProfile.providerURL || null,
+        rawData: oauthProfile.raw || {},
+        linkedAt: now,
+        lastSyncAt: now
+      };
+
+      const user = {
+        id: userId,
+        email: normalizedEmail,
+        emailVerified: true, // OAuth emails are considered verified
+        passwordHash: null, // OAuth users don't have passwords initially
+        firstName,
+        lastName,
+        phone: null,
+        phoneVerified: false,
+        status: 'active',
+        role: options.role || 'user',
+        oauthProvider: provider, // Primary OAuth provider (legacy)
+        oauthId: oauthProfile.id, // Primary OAuth ID (legacy)
+        oauthProfiles: [oauthProfileData], // New OAuth profiles array
+        kycStatus: 'pending',
+        kycVerifiedAt: null,
+        privacyConsent: true, // Assumed when using OAuth
+        marketingConsent: options.marketingConsent || false,
+        dataRetentionConsent: true,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null
+      };
+
+      // Store user
+      this.users.set(userId, user);
+
+      // Return user without password hash
+      const { passwordHash: _, ...userResponse } = user;
+      return {
+        ...userResponse,
+        isNewUser: true
+      };
+
+    } catch (error) {
+      if (error instanceof UserError) {
+        throw error;
+      }
+      throw new UserError(`Failed to create user from OAuth: ${error.message}`, 'OAUTH_CREATE_FAILED');
+    }
+  }
+
+  /**
+   * Link OAuth profile to existing user
+   * @param {string} userId - User ID to link profile to
+   * @param {string} provider - OAuth provider
+   * @param {Object} oauthProfile - OAuth profile data
+   * @returns {Promise<Object>} Updated user object
+   */
+  async linkOAuthProfile(userId, provider, oauthProfile) {
+    try {
+      if (!userId) {
+        throw new UserError('User ID is required', 'MISSING_USER_ID');
+      }
+
+      if (!provider) {
+        throw new UserError('OAuth provider is required', 'MISSING_PROVIDER');
+      }
+
+      if (!oauthProfile) {
+        throw new UserError('OAuth profile is required', 'MISSING_OAUTH_PROFILE');
+      }
+
+      if (!oauthProfile.id) {
+        throw new UserError('Provider ID is required in OAuth profile', 'MISSING_PROVIDER_ID');
+      }
+
+      // Get user
+      const user = this.users.get(userId);
+      if (!user || user.deletedAt) {
+        throw new UserError('User not found', 'USER_NOT_FOUND');
+      }
+
+      // Check if OAuth profile is already linked to this user
+      const existingProfile = user.oauthProfiles?.find(profile => 
+        profile.provider === provider && profile.providerId === oauthProfile.id
+      );
+
+      if (existingProfile) {
+        throw new UserError('OAuth profile is already linked to this account', 'OAUTH_PROFILE_ALREADY_LINKED');
+      }
+
+      // Check if OAuth profile is linked to another user
+      const existingOAuthUser = await this.findByOAuthProvider(provider, oauthProfile.id);
+      if (existingOAuthUser && existingOAuthUser.id !== userId) {
+        throw new UserError('OAuth profile is already linked to another account', 'OAUTH_PROFILE_EXISTS');
+      }
+
+      // Create OAuth profile object
+      const now = new Date();
+      const oauthProfileData = {
+        provider,
+        providerId: oauthProfile.id,
+        email: oauthProfile.email,
+        firstName: oauthProfile.firstName ? this.sanitizeName(oauthProfile.firstName) : '',
+        lastName: oauthProfile.lastName ? this.sanitizeName(oauthProfile.lastName) : '',
+        profilePicture: oauthProfile.profilePicture || null,
+        headline: oauthProfile.headline || null,
+        profileURL: oauthProfile.providerURL || null,
+        rawData: oauthProfile.raw || {},
+        linkedAt: now,
+        lastSyncAt: now
+      };
+
+      // Initialize oauthProfiles array if it doesn't exist
+      if (!user.oauthProfiles) {
+        user.oauthProfiles = [];
+      }
+
+      // Add OAuth profile
+      user.oauthProfiles.push(oauthProfileData);
+
+      // Update legacy fields if this is the first OAuth profile
+      if (!user.oauthProvider && !user.oauthId) {
+        user.oauthProvider = provider;
+        user.oauthId = oauthProfile.id;
+      }
+
+      // Update user
+      const updatedUser = {
+        ...user,
+        updatedAt: now
+      };
+
+      this.users.set(userId, updatedUser);
+
+      // Return user without password hash
+      const { passwordHash: _, ...userResponse } = updatedUser;
+      return userResponse;
+
+    } catch (error) {
+      if (error instanceof UserError) {
+        throw error;
+      }
+      throw new UserError(`Failed to link OAuth profile: ${error.message}`, 'OAUTH_LINK_FAILED');
+    }
+  }
+
+  /**
+   * Unlink OAuth profile from user
+   * @param {string} userId - User ID
+   * @param {string} provider - OAuth provider
+   * @param {string} providerId - Provider-specific user ID
+   * @returns {Promise<Object>} Updated user object
+   */
+  async unlinkOAuthProfile(userId, provider, providerId) {
+    try {
+      if (!userId) {
+        throw new UserError('User ID is required', 'MISSING_USER_ID');
+      }
+
+      if (!provider) {
+        throw new UserError('OAuth provider is required', 'MISSING_PROVIDER');
+      }
+
+      if (!providerId) {
+        throw new UserError('OAuth provider ID is required', 'MISSING_PROVIDER_ID');
+      }
+
+      // Get user
+      const user = this.users.get(userId);
+      if (!user || user.deletedAt) {
+        throw new UserError('User not found', 'USER_NOT_FOUND');
+      }
+
+      // Find and remove OAuth profile
+      if (!user.oauthProfiles) {
+        user.oauthProfiles = [];
+      }
+
+      const profileIndex = user.oauthProfiles.findIndex(profile => 
+        profile.provider === provider && profile.providerId === providerId
+      );
+
+      if (profileIndex === -1) {
+        throw new UserError('OAuth profile not found on this account', 'OAUTH_PROFILE_NOT_FOUND');
+      }
+
+      // Check if user would have no password after unlinking
+      if (!user.passwordHash && user.oauthProfiles.length === 1) {
+        throw new UserError('Cannot unlink last OAuth profile without setting a password', 'LAST_AUTH_METHOD');
+      }
+
+      // Remove OAuth profile
+      user.oauthProfiles.splice(profileIndex, 1);
+
+      // Update legacy fields if this was the primary OAuth provider
+      if (user.oauthProvider === provider && user.oauthId === providerId) {
+        if (user.oauthProfiles.length > 0) {
+          // Set to first remaining OAuth profile
+          user.oauthProvider = user.oauthProfiles[0].provider;
+          user.oauthId = user.oauthProfiles[0].providerId;
+        } else {
+          // Clear legacy fields
+          user.oauthProvider = null;
+          user.oauthId = null;
+        }
+      }
+
+      // Update user
+      const now = new Date();
+      const updatedUser = {
+        ...user,
+        updatedAt: now
+      };
+
+      this.users.set(userId, updatedUser);
+
+      // Return user without password hash
+      const { passwordHash: _, ...userResponse } = updatedUser;
+      return userResponse;
+
+    } catch (error) {
+      if (error instanceof UserError) {
+        throw error;
+      }
+      throw new UserError(`Failed to unlink OAuth profile: ${error.message}`, 'OAUTH_UNLINK_FAILED');
+    }
+  }
+
+  /**
+   * Get user's OAuth profiles
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Array of OAuth profiles
+   */
+  async getOAuthProfiles(userId) {
+    try {
+      if (!userId) {
+        throw new UserError('User ID is required', 'MISSING_USER_ID');
+      }
+
+      const user = this.users.get(userId);
+      if (!user || user.deletedAt) {
+        throw new UserError('User not found', 'USER_NOT_FOUND');
+      }
+
+      return user.oauthProfiles || [];
+
+    } catch (error) {
+      if (error instanceof UserError) {
+        throw error;
+      }
+      throw new UserError(`Failed to get OAuth profiles: ${error.message}`, 'OAUTH_PROFILES_FAILED');
+    }
+  }
+
+  /**
+   * Update OAuth profile data (for syncing)
+   * @param {string} userId - User ID
+   * @param {string} provider - OAuth provider
+   * @param {string} providerId - Provider-specific user ID
+   * @param {Object} profileData - Updated profile data
+   * @returns {Promise<Object>} Updated user object
+   */
+  async updateOAuthProfile(userId, provider, providerId, profileData) {
+    try {
+      if (!userId) {
+        throw new UserError('User ID is required', 'MISSING_USER_ID');
+      }
+
+      if (!provider) {
+        throw new UserError('OAuth provider is required', 'MISSING_PROVIDER');
+      }
+
+      if (!providerId) {
+        throw new UserError('OAuth provider ID is required', 'MISSING_PROVIDER_ID');
+      }
+
+      // Get user
+      const user = this.users.get(userId);
+      if (!user || user.deletedAt) {
+        throw new UserError('User not found', 'USER_NOT_FOUND');
+      }
+
+      // Find OAuth profile
+      if (!user.oauthProfiles) {
+        user.oauthProfiles = [];
+      }
+
+      const profileIndex = user.oauthProfiles.findIndex(profile => 
+        profile.provider === provider && profile.providerId === providerId
+      );
+
+      if (profileIndex === -1) {
+        throw new UserError('OAuth profile not found on this account', 'OAUTH_PROFILE_NOT_FOUND');
+      }
+
+      // Update profile data
+      const now = new Date();
+      const currentProfile = user.oauthProfiles[profileIndex];
+      
+      user.oauthProfiles[profileIndex] = {
+        ...currentProfile,
+        firstName: profileData.firstName ? this.sanitizeName(profileData.firstName) : currentProfile.firstName,
+        lastName: profileData.lastName ? this.sanitizeName(profileData.lastName) : currentProfile.lastName,
+        profilePicture: profileData.profilePicture || currentProfile.profilePicture,
+        headline: profileData.headline || currentProfile.headline,
+        profileURL: profileData.profileURL || currentProfile.profileURL,
+        rawData: profileData.rawData || currentProfile.rawData,
+        lastSyncAt: now
+      };
+
+      // Update user
+      const updatedUser = {
+        ...user,
+        updatedAt: now
+      };
+
+      this.users.set(userId, updatedUser);
+
+      // Return user without password hash
+      const { passwordHash: _, ...userResponse } = updatedUser;
+      return userResponse;
+
+    } catch (error) {
+      if (error instanceof UserError) {
+        throw error;
+      }
+      throw new UserError(`Failed to update OAuth profile: ${error.message}`, 'OAUTH_UPDATE_FAILED');
     }
   }
 

@@ -575,4 +575,416 @@ describe('User Model', () => {
       validator.isEmail = originalIsEmail;
     });
   });
+
+  describe('OAuth functionality', () => {
+    const mockOAuthProfile = {
+      id: 'linkedin-123',
+      email: 'oauth@example.com',
+      firstName: 'OAuth',
+      lastName: 'User',
+      profilePicture: 'https://example.com/pic.jpg',
+      headline: 'Software Engineer',
+      providerURL: 'https://linkedin.com/in/test',
+      raw: {
+        id: 'linkedin-123',
+        localizedFirstName: 'OAuth',
+        localizedLastName: 'User'
+      }
+    };
+
+    describe('findByOAuthProvider', () => {
+      test('should find user by OAuth provider and ID', async () => {
+        const user = await User.createFromOAuth('linkedin', mockOAuthProfile);
+        
+        const foundUser = await User.findByOAuthProvider('linkedin', 'linkedin-123');
+        
+        expect(foundUser).toBeDefined();
+        expect(foundUser.id).toBe(user.id);
+        expect(foundUser.email).toBe('oauth@example.com');
+      });
+
+      test('should return null for non-existent OAuth profile', async () => {
+        const foundUser = await User.findByOAuthProvider('linkedin', 'nonexistent');
+        expect(foundUser).toBeNull();
+      });
+
+      test('should handle missing parameters', async () => {
+        await expect(User.findByOAuthProvider(null, 'id')).rejects.toThrow(UserError);
+        await expect(User.findByOAuthProvider('linkedin', null)).rejects.toThrow(UserError);
+      });
+
+      test('should find user in OAuth profiles array', async () => {
+        // Create regular user first
+        const regularUser = await User.create({
+          email: 'regular@example.com',
+          password: 'SecurePass123!',
+          firstName: 'Regular',
+          lastName: 'User',
+          privacyConsent: true
+        });
+
+        // Link OAuth profile
+        await User.linkOAuthProfile(regularUser.id, 'linkedin', mockOAuthProfile);
+
+        // Should find by OAuth provider
+        const foundUser = await User.findByOAuthProvider('linkedin', 'linkedin-123');
+        expect(foundUser).toBeDefined();
+        expect(foundUser.id).toBe(regularUser.id);
+      });
+    });
+
+    describe('createFromOAuth', () => {
+      test('should create new user from OAuth profile', async () => {
+        const user = await User.createFromOAuth('linkedin', mockOAuthProfile);
+
+        expect(user).toMatchObject({
+          id: expect.any(String),
+          email: 'oauth@example.com',
+          firstName: 'OAuth',
+          lastName: 'User',
+          emailVerified: true,
+          role: 'user',
+          oauthProvider: 'linkedin',
+          oauthId: 'linkedin-123',
+          status: 'active',
+          kycStatus: 'pending',
+          isNewUser: true
+        });
+
+        expect(user.oauthProfiles).toHaveLength(1);
+        expect(user.oauthProfiles[0]).toMatchObject({
+          provider: 'linkedin',
+          providerId: 'linkedin-123',
+          email: 'oauth@example.com',
+          firstName: 'OAuth',
+          lastName: 'User',
+          profilePicture: 'https://example.com/pic.jpg',
+          headline: 'Software Engineer'
+        });
+      });
+
+      test('should validate required fields', async () => {
+        await expect(User.createFromOAuth(null, mockOAuthProfile)).rejects.toThrow(UserError);
+        await expect(User.createFromOAuth('linkedin', null)).rejects.toThrow(UserError);
+        
+        const profileWithoutEmail = { ...mockOAuthProfile };
+        delete profileWithoutEmail.email;
+        await expect(User.createFromOAuth('linkedin', profileWithoutEmail)).rejects.toThrow(UserError);
+
+        const profileWithoutId = { ...mockOAuthProfile };
+        delete profileWithoutId.id;
+        await expect(User.createFromOAuth('linkedin', profileWithoutId)).rejects.toThrow(UserError);
+      });
+
+      test('should handle duplicate email', async () => {
+        // Create regular user with same email
+        await User.create({
+          email: 'oauth@example.com',
+          password: 'SecurePass123!',
+          firstName: 'Existing',
+          lastName: 'User',
+          privacyConsent: true
+        });
+
+        await expect(User.createFromOAuth('linkedin', mockOAuthProfile)).rejects.toThrow(UserError);
+      });
+
+      test('should handle duplicate OAuth profile', async () => {
+        // Create OAuth user first
+        await User.createFromOAuth('linkedin', mockOAuthProfile);
+
+        // Try to create again with same OAuth profile
+        await expect(User.createFromOAuth('linkedin', mockOAuthProfile)).rejects.toThrow(UserError);
+      });
+
+      test('should sanitize profile names', async () => {
+        const profileWithBadNames = {
+          ...mockOAuthProfile,
+          firstName: '  <script>alert("xss")</script>John  ',
+          lastName: '  Doe<img src=x onerror=alert(1)>  '
+        };
+
+        const user = await User.createFromOAuth('linkedin', profileWithBadNames);
+
+        expect(user.firstName).toContain('&lt;script&gt;');
+        expect(user.firstName).not.toContain('<script>');
+        expect(user.lastName).toContain('&lt;img');
+        expect(user.lastName).not.toContain('<img');
+      });
+    });
+
+    describe('linkOAuthProfile', () => {
+      let existingUser;
+
+      beforeEach(async () => {
+        existingUser = await User.create({
+          email: 'existing@example.com',
+          password: 'SecurePass123!',
+          firstName: 'Existing',
+          lastName: 'User',
+          privacyConsent: true
+        });
+      });
+
+      test('should link OAuth profile to existing user', async () => {
+        const linkedUser = await User.linkOAuthProfile(existingUser.id, 'linkedin', mockOAuthProfile);
+
+        expect(linkedUser.oauthProfiles).toHaveLength(1);
+        expect(linkedUser.oauthProfiles[0]).toMatchObject({
+          provider: 'linkedin',
+          providerId: 'linkedin-123',
+          email: 'oauth@example.com',
+          linkedAt: expect.any(Date)
+        });
+
+        // Should update legacy fields for first OAuth profile
+        expect(linkedUser.oauthProvider).toBe('linkedin');
+        expect(linkedUser.oauthId).toBe('linkedin-123');
+      });
+
+      test('should handle linking multiple OAuth profiles', async () => {
+        // Link first profile
+        await User.linkOAuthProfile(existingUser.id, 'linkedin', mockOAuthProfile);
+
+        // Create second OAuth profile
+        const secondProfile = {
+          ...mockOAuthProfile,
+          id: 'github-456',
+          email: 'github@example.com'
+        };
+
+        // Link second profile
+        const linkedUser = await User.linkOAuthProfile(existingUser.id, 'github', secondProfile);
+
+        expect(linkedUser.oauthProfiles).toHaveLength(2);
+        expect(linkedUser.oauthProfiles.map(p => p.provider)).toContain('linkedin');
+        expect(linkedUser.oauthProfiles.map(p => p.provider)).toContain('github');
+      });
+
+      test('should prevent duplicate OAuth profile linking', async () => {
+        // Link profile once
+        await User.linkOAuthProfile(existingUser.id, 'linkedin', mockOAuthProfile);
+
+        // Try to link same profile again
+        await expect(User.linkOAuthProfile(existingUser.id, 'linkedin', mockOAuthProfile))
+          .rejects.toThrow(UserError);
+      });
+
+      test('should prevent linking OAuth profile already used by another user', async () => {
+        // Create OAuth user
+        await User.createFromOAuth('linkedin', mockOAuthProfile);
+
+        // Try to link same OAuth profile to different user
+        await expect(User.linkOAuthProfile(existingUser.id, 'linkedin', mockOAuthProfile))
+          .rejects.toThrow(UserError);
+      });
+
+      test('should validate required parameters', async () => {
+        await expect(User.linkOAuthProfile(null, 'linkedin', mockOAuthProfile)).rejects.toThrow(UserError);
+        await expect(User.linkOAuthProfile(existingUser.id, null, mockOAuthProfile)).rejects.toThrow(UserError);
+        await expect(User.linkOAuthProfile(existingUser.id, 'linkedin', null)).rejects.toThrow(UserError);
+        
+        const profileWithoutId = { ...mockOAuthProfile };
+        delete profileWithoutId.id;
+        await expect(User.linkOAuthProfile(existingUser.id, 'linkedin', profileWithoutId)).rejects.toThrow(UserError);
+      });
+    });
+
+    describe('unlinkOAuthProfile', () => {
+      let userWithOAuth;
+
+      beforeEach(async () => {
+        userWithOAuth = await User.createFromOAuth('linkedin', mockOAuthProfile);
+      });
+
+      test('should unlink OAuth profile from user', async () => {
+        // This test should fail because it's the last auth method
+        // But let's test the successful path by first adding a password
+        
+        // For this test, we'll create a user with password and then add OAuth
+        const userWithPassword = await User.create({
+          email: 'password@example.com',
+          password: 'SecurePass123!',
+          firstName: 'Password',
+          lastName: 'User',
+          privacyConsent: true
+        });
+
+        const uniqueProfile = {
+          ...mockOAuthProfile,
+          id: 'linkedin-unlink-test',
+          email: 'unlink@example.com'
+        };
+
+        await User.linkOAuthProfile(userWithPassword.id, 'linkedin', uniqueProfile);
+        
+        const updatedUser = await User.unlinkOAuthProfile(userWithPassword.id, 'linkedin', 'linkedin-unlink-test');
+
+        expect(updatedUser.oauthProfiles).toHaveLength(0);
+        expect(updatedUser.oauthProvider).toBeNull();
+        expect(updatedUser.oauthId).toBeNull();
+      });
+
+      test('should handle user with multiple OAuth profiles', async () => {
+        // Add second OAuth profile
+        const secondProfile = { ...mockOAuthProfile, id: 'github-456' };
+        await User.linkOAuthProfile(userWithOAuth.id, 'github', secondProfile);
+
+        // Unlink first profile
+        const updatedUser = await User.unlinkOAuthProfile(userWithOAuth.id, 'linkedin', 'linkedin-123');
+
+        expect(updatedUser.oauthProfiles).toHaveLength(1);
+        expect(updatedUser.oauthProfiles[0].provider).toBe('github');
+        
+        // Legacy fields should be updated to remaining profile
+        expect(updatedUser.oauthProvider).toBe('github');
+        expect(updatedUser.oauthId).toBe('github-456');
+      });
+
+      test('should prevent unlinking last authentication method', async () => {
+        // OAuth user without password (passwordHash is not returned in user response)
+        // But internally the user should have no password
+        await expect(User.unlinkOAuthProfile(userWithOAuth.id, 'linkedin', 'linkedin-123'))
+          .rejects.toThrow(UserError);
+      });
+
+      test('should allow unlinking when user has password', async () => {
+        // Create user with both password and OAuth
+        const userWithBoth = await User.create({
+          email: 'both@example.com',
+          password: 'SecurePass123!',
+          firstName: 'Both',
+          lastName: 'User',
+          privacyConsent: true
+        });
+
+        // Create a unique OAuth profile for this test
+        const uniqueOAuthProfile = {
+          ...mockOAuthProfile,
+          id: 'linkedin-unique-456',
+          email: 'unique@example.com'
+        };
+
+        await User.linkOAuthProfile(userWithBoth.id, 'linkedin', uniqueOAuthProfile);
+        
+        // Should be able to unlink because user has password
+        const updatedUser = await User.unlinkOAuthProfile(userWithBoth.id, 'linkedin', 'linkedin-unique-456');
+        expect(updatedUser.oauthProfiles).toHaveLength(0);
+      });
+
+      test('should handle non-existent OAuth profile', async () => {
+        await expect(User.unlinkOAuthProfile(userWithOAuth.id, 'github', 'nonexistent'))
+          .rejects.toThrow(UserError);
+      });
+    });
+
+    describe('getOAuthProfiles', () => {
+      test('should return user OAuth profiles', async () => {
+        const user = await User.createFromOAuth('linkedin', mockOAuthProfile);
+        const profiles = await User.getOAuthProfiles(user.id);
+
+        expect(profiles).toHaveLength(1);
+        expect(profiles[0]).toMatchObject({
+          provider: 'linkedin',
+          providerId: 'linkedin-123',
+          email: 'oauth@example.com'
+        });
+      });
+
+      test('should return empty array for user without OAuth profiles', async () => {
+        const user = await User.create({
+          email: 'regular@example.com',
+          password: 'SecurePass123!',
+          firstName: 'Regular',
+          lastName: 'User',
+          privacyConsent: true
+        });
+
+        const profiles = await User.getOAuthProfiles(user.id);
+        expect(profiles).toEqual([]);
+      });
+
+      test('should handle non-existent user', async () => {
+        await expect(User.getOAuthProfiles('nonexistent')).rejects.toThrow(UserError);
+      });
+    });
+
+    describe('updateOAuthProfile', () => {
+      let userWithOAuth;
+
+      beforeEach(async () => {
+        userWithOAuth = await User.createFromOAuth('linkedin', mockOAuthProfile);
+      });
+
+      test('should update OAuth profile data', async () => {
+        const updatedData = {
+          firstName: 'Updated',
+          lastName: 'Name',
+          profilePicture: 'https://newpic.com/pic.jpg',
+          headline: 'Senior Engineer'
+        };
+
+        const updatedUser = await User.updateOAuthProfile(
+          userWithOAuth.id,
+          'linkedin',
+          'linkedin-123',
+          updatedData
+        );
+
+        const profile = updatedUser.oauthProfiles[0];
+        expect(profile.firstName).toBe('Updated');
+        expect(profile.lastName).toBe('Name');
+        expect(profile.profilePicture).toBe('https://newpic.com/pic.jpg');
+        expect(profile.headline).toBe('Senior Engineer');
+        expect(profile.lastSyncAt).toBeDefined();
+      });
+
+      test('should handle partial updates', async () => {
+        const partialUpdate = {
+          headline: 'New Headline Only'
+        };
+
+        const updatedUser = await User.updateOAuthProfile(
+          userWithOAuth.id,
+          'linkedin',
+          'linkedin-123',
+          partialUpdate
+        );
+
+        const profile = updatedUser.oauthProfiles[0];
+        expect(profile.headline).toBe('New Headline Only');
+        expect(profile.firstName).toBe('OAuth'); // Should preserve existing
+        expect(profile.lastName).toBe('User');   // Should preserve existing
+      });
+
+      test('should handle non-existent OAuth profile', async () => {
+        await expect(User.updateOAuthProfile(
+          userWithOAuth.id,
+          'github',
+          'nonexistent',
+          { headline: 'test' }
+        )).rejects.toThrow(UserError);
+      });
+
+      test('should sanitize updated names', async () => {
+        const maliciousUpdate = {
+          firstName: '<script>alert("xss")</script>',
+          lastName: '<img src=x onerror=alert(1)>'
+        };
+
+        const updatedUser = await User.updateOAuthProfile(
+          userWithOAuth.id,
+          'linkedin',
+          'linkedin-123',
+          maliciousUpdate
+        );
+
+        const profile = updatedUser.oauthProfiles[0];
+        expect(profile.firstName).toContain('&lt;script&gt;');
+        expect(profile.firstName).not.toContain('<script>');
+        expect(profile.lastName).toContain('&lt;img');
+        expect(profile.lastName).not.toContain('<img');
+      });
+    });
+  });
 });
