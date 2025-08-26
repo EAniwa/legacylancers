@@ -13,6 +13,7 @@ const profileRoutes = require('./routes/api/profiles');
 const skillsRoutes = require('./routes/api/skills');
 const uploadRoutes = require('./routes/api/upload');
 const availabilityRoutes = require('./routes/api/availability');
+const publicProfileRoutes = require('./routes/public-profiles');
 const { 
   securityHeaders, 
   corsWithSecurity, 
@@ -73,6 +74,9 @@ app.use('/api/profiles', profileRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/availability', availabilityRoutes);
+
+// Public profile routes (SEO-friendly)
+app.use('/', publicProfileRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

@@ -22,19 +22,33 @@
     "multer": "^2.0.0-beta.3",
     "sharp": "^0.32.6",
     "uuid": "^9.0.0",
-    "validator": "^13.9.0"
+    "validator": "^13.9.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.8.1"
   },
   "devDependencies": {
     "jest": "^29.6.1",
     "nodemon": "^3.0.1",
-    "supertest": "^6.3.3"
+    "supertest": "^6.3.3",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/user-event": "^14.4.3",
+    "identity-obj-proxy": "^3.0.0",
+    "jest-environment-jsdom": "^29.6.1"
   },
   "jest": {
-    "testEnvironment": "node",
+    "testEnvironment": "jsdom",
+    "setupFilesAfterEnv": ["<rootDir>/src/setupTests.js"],
     "collectCoverageFrom": [
       "src/**/*.js",
-      "!src/app.js"
+      "!src/app.js",
+      "!src/**/*.test.js",
+      "!src/setupTests.js"
     ],
+    "moduleNameMapping": {
+      "\\.(css|less|scss|sass)$": "identity-obj-proxy"
+    },
     "coverageThreshold": {
       "global": {
         "branches": 80,
