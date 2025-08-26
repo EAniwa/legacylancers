@@ -5,10 +5,12 @@
 
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/api/profiles');
+const uploadRoutes = require('./routes/api/upload');
 const { 
   securityHeaders, 
   corsWithSecurity, 
@@ -18,6 +20,7 @@ const {
 } = require('./middleware/security');
 
 const authConfig = require('./config/auth');
+const cdnConfig = require('./config/cdn');
 
 // Create Express application
 const app = express();
@@ -38,6 +41,19 @@ app.use('/api/', generalRateLimit());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Static file serving for uploads (with security headers)
+if (cdnConfig.storageType === 'local') {
+  app.use('/uploads', express.static(cdnConfig.local.baseDir, {
+    maxAge: cdnConfig.cache.maxAge,
+    etag: cdnConfig.cache.etag,
+    lastModified: cdnConfig.cache.lastModified,
+    // Security: prevent directory listing
+    index: false,
+    // Security: prevent access to dotfiles
+    dotfiles: 'deny'
+  }));
+}
+
 // Health check endpoint (before auth routes for easy monitoring)
 app.get('/health', (req, res) => {
   res.json({
@@ -52,6 +68,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/profiles', profileRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -87,6 +104,8 @@ if (require.main === module) {
     console.log(`🔒 JWT Algorithm: ${authConfig.jwt.algorithm}`);
     console.log(`👥 Profile API: /api/profiles`);
     console.log(`🔑 Auth API: /api/auth`);
+    console.log(`📸 Upload API: /api/upload`);
+    console.log(`📁 Storage: ${cdnConfig.storageType} (${cdnConfig.storageType === 'local' ? cdnConfig.local.baseDir : 'CDN'})`);
     console.log(`⚡ Ready for requests`);
   });
 }
