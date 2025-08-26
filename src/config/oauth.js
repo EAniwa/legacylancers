@@ -57,9 +57,12 @@ const config = {
       // API endpoints
       profileURL: 'https://api.linkedin.com/v2/people/~',
       emailURL: 'https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))',
+      positionsURL: 'https://api.linkedin.com/v2/positions',
+      educationURL: 'https://api.linkedin.com/v2/educations',
+      skillsURL: 'https://api.linkedin.com/v2/skills',
       
-      // OAuth scopes - requesting basic profile and email
-      scope: 'r_liteprofile r_emailaddress',
+      // OAuth scopes - extended for comprehensive profile import and verification
+      scope: 'r_liteprofile r_emailaddress r_basicprofile',
       
       // Response type for authorization code flow
       responseType: 'code',
@@ -87,11 +90,14 @@ const config = {
         color: '#0077B5',
         description: 'Connect with your LinkedIn profile',
         
-        // Feature flags
+        // Feature flags - enhanced for verification system
         features: {
           profileImport: true,
           emailVerification: true,
-          skillsImport: false, // Future feature
+          skillsImport: true, // Now implemented for verification
+          positionsImport: true, // Work experience import
+          educationImport: true, // Education history import
+          verificationWorkflow: true, // LinkedIn verification workflow
           connectionsImport: false // Future feature
         }
       }
