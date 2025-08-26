@@ -8,6 +8,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
+const profileRoutes = require('./routes/api/profiles');
 const { 
   securityHeaders, 
   corsWithSecurity, 
@@ -41,7 +42,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.get('/health', (req, res) => {
   res.json({
     success: true,
-    message: 'LegacyLancers Auth Service',
+    message: 'LegacyLancers API Service',
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString()
@@ -50,6 +51,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/profiles', profileRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -80,10 +82,12 @@ const PORT = process.env.PORT || 3001;
 
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`🚀 Auth service started on port ${PORT}`);
+    console.log(`🚀 LegacyLancers API started on port ${PORT}`);
     console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔒 JWT Algorithm: ${authConfig.jwt.algorithm}`);
-    console.log(`⚡ Ready for authentication requests`);
+    console.log(`👥 Profile API: /api/profiles`);
+    console.log(`🔑 Auth API: /api/auth`);
+    console.log(`⚡ Ready for requests`);
   });
 }
 
