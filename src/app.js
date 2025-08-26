@@ -10,6 +10,7 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/api/profiles');
+const skillsRoutes = require('./routes/api/skills');
 const uploadRoutes = require('./routes/api/upload');
 const { 
   securityHeaders, 
@@ -68,6 +69,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/profiles', profileRoutes);
+app.use('/api/skills', skillsRoutes);
 app.use('/api/upload', uploadRoutes);
 
 // 404 handler
@@ -103,6 +105,7 @@ if (require.main === module) {
     console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔒 JWT Algorithm: ${authConfig.jwt.algorithm}`);
     console.log(`👥 Profile API: /api/profiles`);
+    console.log(`🎯 Skills API: /api/skills`);
     console.log(`🔑 Auth API: /api/auth`);
     console.log(`📸 Upload API: /api/upload`);
     console.log(`📁 Storage: ${cdnConfig.storageType} (${cdnConfig.storageType === 'local' ? cdnConfig.local.baseDir : 'CDN'})`);
