@@ -12,6 +12,7 @@ const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/api/profiles');
 const skillsRoutes = require('./routes/api/skills');
 const uploadRoutes = require('./routes/api/upload');
+const availabilityRoutes = require('./routes/api/availability');
 const { 
   securityHeaders, 
   corsWithSecurity, 
@@ -71,6 +72,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/availability', availabilityRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -108,6 +110,7 @@ if (require.main === module) {
     console.log(`🎯 Skills API: /api/skills`);
     console.log(`🔑 Auth API: /api/auth`);
     console.log(`📸 Upload API: /api/upload`);
+    console.log(`📅 Availability API: /api/availability`);
     console.log(`📁 Storage: ${cdnConfig.storageType} (${cdnConfig.storageType === 'local' ? cdnConfig.local.baseDir : 'CDN'})`);
     console.log(`⚡ Ready for requests`);
   });
