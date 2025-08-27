@@ -262,6 +262,48 @@ const presets = {
     max,
     message: 'Too many requests per hour, please try again later',
     ...options
+  }),
+
+  /**
+   * Booking-specific rate limiters
+   */
+  bookingCreation: (options = {}) => rateLimiter({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 10, // Max 10 booking creations per hour
+    message: 'Too many booking requests, please try again later',
+    skipSuccessfulRequests: false,
+    skipFailedRequests: true, // Don't count failed attempts against limit
+    ...options
+  }),
+
+  bookingListing: (options = {}) => rateLimiter({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Max 100 listing requests per 15 minutes
+    message: 'Too many booking list requests, please try again later',
+    ...options
+  }),
+
+  bookingDetails: (options = {}) => rateLimiter({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200, // Max 200 detail requests per 15 minutes
+    message: 'Too many booking detail requests, please try again later',
+    ...options
+  }),
+
+  bookingUpdates: (options = {}) => rateLimiter({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 30, // Max 30 update requests per 15 minutes
+    message: 'Too many booking updates, please try again later',
+    skipFailedRequests: true, // Don't count failed attempts
+    ...options
+  }),
+
+  bookingStateChanges: (options = {}) => rateLimiter({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 20, // Max 20 state changes per hour
+    message: 'Too many booking state changes, please try again later',
+    skipFailedRequests: true, // Don't count failed attempts
+    ...options
   })
 };
 
@@ -313,7 +355,7 @@ function resetRateLimit(key) {
 
 module.exports = {
   rateLimiter,
-  presets,
+  ...presets, // Spread presets to make them available at top level
   globalRateLimit,
   getRateLimitStatus,
   resetRateLimit,

@@ -5,6 +5,14 @@
 
 import '@testing-library/jest-dom';
 
+// Add TextEncoder and TextDecoder for Node.js environment
+if (typeof global.TextEncoder === 'undefined') {
+  global.TextEncoder = require('util').TextEncoder;
+}
+if (typeof global.TextDecoder === 'undefined') {
+  global.TextDecoder = require('util').TextDecoder;
+}
+
 // Mock localStorage and sessionStorage
 const localStorageMock = (() => {
   let store = {};

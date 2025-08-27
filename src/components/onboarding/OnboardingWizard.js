@@ -3,10 +3,16 @@
  * Core wizard framework with step management, routing, and progress tracking
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOnboardingState } from '../../hooks/useOnboardingState';
+import { OnboardingAnalytics } from '../../utils/analytics';
 import StepIndicator from './StepIndicator';
+import PersonalInfoStep from './steps/PersonalInfoStep';
+import SkillsStep from './steps/SkillsStep';
+import ExperienceStep from './steps/ExperienceStep';
+import AvailabilityStep from './steps/AvailabilityStep';
+import ReviewStep from './steps/ReviewStep';
 import './OnboardingWizard.css';
 
 const ONBOARDING_STEPS = [
@@ -15,7 +21,7 @@ const ONBOARDING_STEPS = [
     title: 'Personal Information & Photo',
     description: 'Tell us about yourself and add a professional photo',
     path: '/onboarding/personal-info',
-    component: null, // Will be provided by Stream B
+    component: PersonalInfoStep,
     required: true,
     estimated_time: '5 minutes'
   },
@@ -24,7 +30,7 @@ const ONBOARDING_STEPS = [
     title: 'Skills & Categorization',
     description: 'Add your professional skills and expertise areas',
     path: '/onboarding/skills',
-    component: null, // Will be provided by Stream C
+    component: SkillsStep,
     required: true,
     estimated_time: '10 minutes'
   },
@@ -33,7 +39,7 @@ const ONBOARDING_STEPS = [
     title: 'Experience & Background',
     description: 'Share your work history and professional experience',
     path: '/onboarding/experience',
-    component: null, // Will be provided by Stream D
+    component: ExperienceStep,
     required: true,
     estimated_time: '15 minutes'
   },
@@ -42,7 +48,7 @@ const ONBOARDING_STEPS = [
     title: 'Availability & Rates',
     description: 'Set your availability and compensation preferences',
     path: '/onboarding/availability',
-    component: null, // Will be provided by Stream D
+    component: AvailabilityStep,
     required: true,
     estimated_time: '8 minutes'
   },
@@ -51,7 +57,7 @@ const ONBOARDING_STEPS = [
     title: 'Review & Complete',
     description: 'Review your profile and complete onboarding',
     path: '/onboarding/review',
-    component: null, // Will be provided by this stream
+    component: ReviewStep,
     required: true,
     estimated_time: '5 minutes'
   }
@@ -82,6 +88,10 @@ export default function OnboardingWizard({
   const [currentStepIndex, setCurrentStepIndex] = useState(getCurrentStepIndex());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Analytics tracking
+  const stepStartTime = useRef(Date.now());
+  const onboardingStartTime = useRef(Date.now());
   
   // Initialize onboarding state management
   const {
@@ -133,6 +143,10 @@ export default function OnboardingWizard({
       return;
     }
 
+    // Track step started
+    OnboardingAnalytics.stepStarted(targetStep.id, stepIndex, steps.length);
+    stepStartTime.current = Date.now();
+
     setError(null);
     setCurrentStepIndex(stepIndex);
     updateURL(stepIndex);
@@ -159,11 +173,22 @@ export default function OnboardingWizard({
       setIsLoading(true);
       setError(null);
 
+      const timeSpent = Date.now() - stepStartTime.current;
+      
       // Update step data
       await updateStepData(currentStep.id, stepData);
       
       // Mark step as completed
       await completeStep(currentStep.id);
+
+      // Track step completion
+      OnboardingAnalytics.stepCompleted(
+        currentStep.id, 
+        currentStepIndex, 
+        steps.length, 
+        timeSpent, 
+        stepData
+      );
 
       // Auto-advance to next step
       if (currentStepIndex < steps.length - 1) {
@@ -197,6 +222,17 @@ export default function OnboardingWizard({
       // Final save
       await saveProgress();
 
+      const completionTime = Date.now() - onboardingStartTime.current;
+      const completedSteps = steps.filter(step => isStepCompleted(step.id)).length;
+      
+      // Track onboarding completion
+      OnboardingAnalytics.completed(
+        completionTime,
+        steps.length,
+        completedSteps,
+        progress.overall
+      );
+
       // Call completion handler
       if (onComplete) {
         await onComplete(data, progress);
@@ -222,12 +258,22 @@ export default function OnboardingWizard({
       await saveProgress();
     }
 
+    // Track onboarding abandonment
+    const timeSpent = Date.now() - onboardingStartTime.current;
+    OnboardingAnalytics.abandoned(
+      currentStep.id,
+      currentStepIndex,
+      steps.length,
+      timeSpent,
+      'user_exit'
+    );
+
     if (onExit) {
       onExit(data, progress);
     } else {
       navigate('/dashboard');
     }
-  }, [isDirty, saveProgress, onExit, data, progress, navigate]);
+  }, [isDirty, saveProgress, onExit, data, progress, navigate, currentStep, currentStepIndex, steps.length]);
 
   // Skip step (if enabled)
   const handleSkipStep = useCallback(async () => {
@@ -238,9 +284,17 @@ export default function OnboardingWizard({
     );
     
     if (confirmed) {
+      // Track step skip
+      OnboardingAnalytics.stepSkipped(
+        currentStep.id,
+        currentStepIndex,
+        steps.length,
+        'user_choice'
+      );
+      
       await goToNextStep();
     }
-  }, [enableSkipping, currentStep, goToNextStep]);
+  }, [enableSkipping, currentStep, currentStepIndex, steps.length, goToNextStep]);
 
   // Auto-save handling
   useEffect(() => {
@@ -272,7 +326,7 @@ export default function OnboardingWizard({
   }
 
   // Get current step component
-  const StepComponent = stepComponents[currentStep.id];
+  const StepComponent = stepComponents[currentStep.id] || currentStep.component;
 
   return (
     <div className={`onboarding-wizard ${className}`}>
