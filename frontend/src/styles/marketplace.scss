@@ -1,0 +1,274 @@
+/* Marketplace-specific styles */
+
+.marketplace-layout {
+  @apply grid grid-cols-1 lg:grid-cols-4 gap-6;
+}
+
+.marketplace-filters {
+  @apply lg:col-span-1;
+}
+
+.marketplace-content {
+  @apply lg:col-span-3;
+}
+
+.gig-card {
+  transition: all 0.2s ease-in-out;
+  
+  &:hover {
+    @apply shadow-lg;
+    transform: translateY(-2px);
+  }
+  
+  .gig-title {
+    @apply text-lg font-semibold text-gray-900 mb-2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .gig-description {
+    @apply text-gray-600 text-sm;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .gig-status {
+    @apply inline-flex px-2 py-1 text-xs font-semibold rounded-full;
+    
+    &.open {
+      @apply bg-green-100 text-green-800;
+    }
+    
+    &.in-progress {
+      @apply bg-blue-100 text-blue-800;
+    }
+    
+    &.completed {
+      @apply bg-gray-100 text-gray-800;
+    }
+    
+    &.cancelled {
+      @apply bg-red-100 text-red-800;
+    }
+    
+    &.closed {
+      @apply bg-gray-100 text-gray-800;
+    }
+  }
+  
+  .gig-budget {
+    @apply text-lg font-bold;
+    
+    &.negotiable {
+      @apply text-blue-600;
+    }
+    
+    &.fixed {
+      @apply text-green-600;
+    }
+    
+    &.hourly {
+      @apply text-orange-600;
+    }
+  }
+}
+
+.gig-post-form {
+  @apply max-w-4xl;
+  
+  .form-section {
+    @apply space-y-4;
+  }
+  
+  .skill-grid {
+    @apply grid grid-cols-2 md:grid-cols-4 gap-2;
+    
+    .skill-option {
+      @apply flex items-center p-2 border rounded hover:bg-gray-50 transition-colors;
+      
+      &:hover {
+        @apply border-gray-300;
+      }
+      
+      &.selected {
+        @apply bg-blue-50 border-blue-200;
+      }
+    }
+  }
+  
+  .budget-options {
+    @apply flex gap-4 mb-3;
+    
+    .budget-option {
+      @apply flex items-center;
+    }
+  }
+}
+
+.bid-form {
+  .proposal-textarea {
+    @apply w-full px-3 py-2 border rounded-lg resize-vertical;
+    @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    min-height: 120px;
+  }
+  
+  .gig-requirements {
+    @apply bg-gray-50 p-4 rounded-lg;
+    
+    .requirement-grid {
+      @apply grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600;
+    }
+  }
+}
+
+.filter-panel {
+  @apply bg-white p-6 rounded-lg shadow-lg space-y-6;
+  
+  .filter-section {
+    @apply space-y-3;
+  }
+  
+  .filter-header {
+    @apply flex justify-between items-center;
+  }
+  
+  .skill-filter-list {
+    @apply max-h-40 overflow-y-auto space-y-1;
+    
+    .skill-filter-item {
+      @apply flex items-center p-2 hover:bg-gray-50 rounded transition-colors;
+    }
+  }
+}
+
+.search-bar {
+  @apply relative w-full;
+  
+  .search-input {
+    @apply w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg;
+    @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+  
+  .search-icon {
+    @apply absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none;
+  }
+  
+  .clear-button {
+    @apply absolute inset-y-0 right-0 pr-3 flex items-center;
+  }
+}
+
+.marketplace-stats {
+  .stat-card {
+    @apply bg-white p-4 rounded-lg shadow border text-center;
+    
+    .stat-number {
+      @apply text-2xl font-bold mb-1;
+      
+      &.total {
+        @apply text-blue-600;
+      }
+      
+      &.open {
+        @apply text-green-600;
+      }
+      
+      &.progress {
+        @apply text-orange-600;
+      }
+      
+      &.proposals {
+        @apply text-gray-600;
+      }
+    }
+    
+    .stat-label {
+      @apply text-sm text-gray-600;
+    }
+  }
+}
+
+.empty-marketplace {
+  @apply text-center py-12;
+  
+  .empty-icon {
+    @apply mx-auto h-12 w-12 text-gray-400 mb-4;
+  }
+  
+  .empty-title {
+    @apply text-lg font-medium text-gray-900 mb-2;
+  }
+  
+  .empty-description {
+    @apply text-gray-500 mb-4;
+  }
+}
+
+.skill-tags {
+  @apply flex flex-wrap gap-2;
+  
+  .skill-tag {
+    @apply inline-flex px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded-full;
+  }
+  
+  .skill-more {
+    @apply inline-flex px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full;
+  }
+}
+
+/* Animation effects */
+.marketplace-fade-in {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 1024px) {
+  .marketplace-layout {
+    @apply grid-cols-1 gap-4;
+  }
+  
+  .marketplace-filters {
+    @apply order-2;
+  }
+  
+  .marketplace-content {
+    @apply order-1;
+  }
+  
+  .gig-card {
+    @apply mx-2;
+  }
+  
+  .marketplace-stats {
+    @apply grid-cols-2;
+  }
+}
+
+@media (max-width: 768px) {
+  .skill-grid {
+    @apply grid-cols-1;
+  }
+  
+  .gig-post-form .budget-options {
+    @apply flex-col gap-2;
+  }
+  
+  .marketplace-stats {
+    @apply grid-cols-1;
+  }
+}
