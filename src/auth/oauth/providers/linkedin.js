@@ -327,34 +327,211 @@ class LinkedInProvider {
   }
 
   /**
-   * Get additional user information (future expansion)
+   * Get comprehensive LinkedIn profile data including work experience, education, and skills
+   * @param {string} accessToken - LinkedIn access token
+   * @param {Array} fields - Additional fields to fetch
+   * @returns {Object} Comprehensive profile data
+   */
+  async getComprehensiveProfile(accessToken, fields = []) {
+    try {
+      if (!accessToken) {
+        throw new OAuthError('Access token is required', 'MISSING_ACCESS_TOKEN', 'linkedin');
+      }
+
+      const comprehensiveData = {};
+
+      // Fetch work positions
+      if (fields.includes('positions') && this.config.settings.features.positionsImport) {
+        comprehensiveData.positions = await this.fetchPositions(accessToken);
+      }
+
+      // Fetch education
+      if (fields.includes('education') && this.config.settings.features.educationImport) {
+        comprehensiveData.education = await this.fetchEducation(accessToken);
+      }
+
+      // Fetch skills
+      if (fields.includes('skills') && this.config.settings.features.skillsImport) {
+        comprehensiveData.skills = await this.fetchSkills(accessToken);
+      }
+
+      return comprehensiveData;
+
+    } catch (error) {
+      if (error instanceof OAuthError) {
+        throw error;
+      }
+      throw new OAuthError(
+        `Failed to fetch comprehensive LinkedIn profile data: ${error.message}`,
+        'COMPREHENSIVE_PROFILE_FAILED',
+        'linkedin'
+      );
+    }
+  }
+
+  /**
+   * Fetch work positions from LinkedIn
+   * @param {string} accessToken - LinkedIn access token
+   * @returns {Array} Array of position objects
+   */
+  async fetchPositions(accessToken) {
+    try {
+      const response = await this.httpClient.get(`${this.config.profileURL}?projection=(positions)`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      const positions = response.data.positions?.elements || [];
+      return positions.map(position => this.mapPosition(position));
+
+    } catch (error) {
+      console.warn('Failed to fetch LinkedIn positions:', error.message);
+      return []; // Return empty array on failure
+    }
+  }
+
+  /**
+   * Fetch education from LinkedIn
+   * @param {string} accessToken - LinkedIn access token
+   * @returns {Array} Array of education objects
+   */
+  async fetchEducation(accessToken) {
+    try {
+      const response = await this.httpClient.get(`${this.config.profileURL}?projection=(educations)`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      const education = response.data.educations?.elements || [];
+      return education.map(edu => this.mapEducation(edu));
+
+    } catch (error) {
+      console.warn('Failed to fetch LinkedIn education:', error.message);
+      return []; // Return empty array on failure
+    }
+  }
+
+  /**
+   * Fetch skills from LinkedIn
+   * @param {string} accessToken - LinkedIn access token
+   * @returns {Array} Array of skill objects
+   */
+  async fetchSkills(accessToken) {
+    try {
+      const response = await this.httpClient.get(`${this.config.profileURL}?projection=(skills)`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      const skills = response.data.skills?.elements || [];
+      return skills.map(skill => this.mapSkill(skill));
+
+    } catch (error) {
+      console.warn('Failed to fetch LinkedIn skills:', error.message);
+      return []; // Return empty array on failure
+    }
+  }
+
+  /**
+   * Map LinkedIn position data to our format
+   * @param {Object} position - LinkedIn position data
+   * @returns {Object} Mapped position object
+   */
+  mapPosition(position) {
+    return {
+      id: position.id || null,
+      title: position.title || '',
+      companyName: position.companyName || '',
+      companyId: position.company || null,
+      description: position.description || '',
+      startDate: this.mapLinkedInDate(position.startDate),
+      endDate: this.mapLinkedInDate(position.endDate),
+      isCurrent: !position.endDate,
+      location: position.location?.localizedName || '',
+      skills: position.skills || [],
+      raw: position // Store raw data for future use
+    };
+  }
+
+  /**
+   * Map LinkedIn education data to our format
+   * @param {Object} education - LinkedIn education data
+   * @returns {Object} Mapped education object
+   */
+  mapEducation(education) {
+    return {
+      id: education.id || null,
+      school: education.schoolName || '',
+      degree: education.degreeName || '',
+      fieldOfStudy: education.fieldOfStudy || '',
+      description: education.description || '',
+      startDate: this.mapLinkedInDate(education.startDate),
+      endDate: this.mapLinkedInDate(education.endDate),
+      activities: education.activities || '',
+      raw: education // Store raw data for future use
+    };
+  }
+
+  /**
+   * Map LinkedIn skill data to our format
+   * @param {Object} skill - LinkedIn skill data
+   * @returns {Object} Mapped skill object
+   */
+  mapSkill(skill) {
+    return {
+      id: skill.id || null,
+      name: skill.localizedSkillDisplayName || skill.name || '',
+      endorsements: skill.endorsements?.paging?.total || 0,
+      proficiencyLevel: this.mapSkillProficiency(skill.endorsements?.paging?.total),
+      raw: skill // Store raw data for future use
+    };
+  }
+
+  /**
+   * Map LinkedIn date format to ISO date string
+   * @param {Object} linkedInDate - LinkedIn date object
+   * @returns {string|null} ISO date string or null
+   */
+  mapLinkedInDate(linkedInDate) {
+    if (!linkedInDate) return null;
+    
+    try {
+      const year = linkedInDate.year;
+      const month = linkedInDate.month || 1;
+      const day = linkedInDate.day || 1;
+      
+      if (!year) return null;
+      
+      return new Date(year, month - 1, day).toISOString();
+    } catch (error) {
+      console.warn('Failed to map LinkedIn date:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Map skill endorsement count to proficiency level
+   * @param {number} endorsements - Number of endorsements
+   * @returns {string} Proficiency level
+   */
+  mapSkillProficiency(endorsements = 0) {
+    if (endorsements >= 50) return 'expert';
+    if (endorsements >= 20) return 'advanced';
+    if (endorsements >= 5) return 'intermediate';
+    return 'beginner';
+  }
+
+  /**
+   * Get additional user information (maintained for backward compatibility)
    * @param {string} accessToken - LinkedIn access token
    * @param {Array} fields - Additional fields to fetch
    * @returns {Object} Additional profile data
    */
   async getAdditionalProfile(accessToken, fields = []) {
-    try {
-      // This method can be expanded to fetch additional LinkedIn data
-      // such as skills, positions, education, etc. when needed
-      
-      const additionalData = {};
-
-      // Example: Fetch skills (requires different API permissions)
-      if (fields.includes('skills')) {
-        // This would require additional LinkedIn API permissions
-        // additionalData.skills = await this.fetchSkills(accessToken);
-        additionalData.skills = null; // Placeholder
-      }
-
-      return additionalData;
-
-    } catch (error) {
-      throw new OAuthError(
-        `Failed to fetch additional LinkedIn profile data: ${error.message}`,
-        'ADDITIONAL_PROFILE_FAILED',
-        'linkedin'
-      );
-    }
+    return await this.getComprehensiveProfile(accessToken, fields);
   }
 
   /**

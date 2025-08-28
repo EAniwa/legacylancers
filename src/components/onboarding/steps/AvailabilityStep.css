@@ -1,0 +1,817 @@
+/* AvailabilityStep Component Styles */
+.availability-step {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.availability-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Form Sections */
+.form-section {
+  padding: 1.5rem;
+  background: var(--color-background-card, #ffffff);
+  border-radius: 8px;
+  border: 1px solid var(--color-border-light, #e1e5e9);
+}
+
+.form-section h3 {
+  margin: 0 0 0.5rem 0;
+  color: var(--color-text-primary, #2c3e50);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.section-description {
+  margin: 0 0 1.5rem 0;
+  color: var(--color-text-secondary, #7f8c8d);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* Timezone Selection */
+.timezone-select {
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-input, #ddd);
+  border-radius: 6px;
+  font-size: 1rem;
+  width: 100%;
+  background: var(--color-background-card, #ffffff);
+  color: var(--color-text-primary, #2c3e50);
+}
+
+.timezone-select:focus {
+  outline: none;
+  border-color: var(--color-primary, #3498db);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha, rgba(52, 152, 219, 0.1));
+}
+
+/* Weekly Schedule */
+.weekly-schedule {
+  margin-top: 1rem;
+}
+
+.schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.schedule-header h4 {
+  margin: 0;
+  color: var(--color-text-primary, #2c3e50);
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.timezone-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.timezone-label {
+  color: var(--color-text-secondary, #7f8c8d);
+}
+
+.timezone-value {
+  color: var(--color-primary, #3498db);
+  font-weight: 500;
+}
+
+/* Schedule Days */
+.schedule-days {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.schedule-day {
+  border: 1px solid var(--color-border-light, #e1e5e9);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.schedule-day.available {
+  border-color: var(--color-success, #27ae60);
+  background: var(--color-success-light, #eafaf1);
+}
+
+.schedule-day.unavailable {
+  border-color: var(--color-border-light, #e1e5e9);
+  background: var(--color-background-alt, #f8f9fa);
+}
+
+.day-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--color-border-light, #e1e5e9);
+}
+
+.day-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  margin: 0;
+}
+
+.day-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
+.day-name {
+  font-weight: 500;
+  color: var(--color-text-primary, #2c3e50);
+  font-size: 1rem;
+}
+
+/* Time Slots */
+.time-slots {
+  padding: 1rem;
+}
+
+.time-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.time-input {
+  padding: 0.5rem;
+  border: 1px solid var(--color-border-input, #ddd);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  width: 100px;
+}
+
+.time-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #3498db);
+}
+
+.time-separator {
+  color: var(--color-text-secondary, #7f8c8d);
+  font-size: 0.875rem;
+}
+
+.remove-slot {
+  background: none;
+  border: none;
+  color: var(--color-danger, #e74c3c);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.remove-slot:hover {
+  opacity: 0.7;
+}
+
+.add-time-slot {
+  background: none;
+  border: 1px dashed var(--color-primary, #3498db);
+  color: var(--color-primary, #3498db);
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-time-slot:hover {
+  background: var(--color-primary-light, #ecf5ff);
+}
+
+/* Availability Summary */
+.availability-summary {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--color-info-light, #e3f2fd);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.total-hours {
+  color: var(--color-info-dark, #1565c0);
+  font-weight: 500;
+}
+
+/* Rate Configuration */
+.rate-configuration {
+  margin-top: 1rem;
+}
+
+.rate-configuration h4 {
+  margin: 0 0 0.5rem 0;
+  color: var(--color-text-primary, #2c3e50);
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.rate-description {
+  margin: 0 0 1.5rem 0;
+  color: var(--color-text-secondary, #7f8c8d);
+  font-size: 0.95rem;
+}
+
+/* Engagement Types */
+.engagement-types {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.engagement-type {
+  border: 1px solid var(--color-border-light, #e1e5e9);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.engagement-type.enabled {
+  border-color: var(--color-primary, #3498db);
+  background: var(--color-primary-light, #ecf5ff);
+}
+
+.engagement-type.disabled {
+  background: var(--color-background-alt, #f8f9fa);
+  opacity: 0.7;
+}
+
+.engagement-header {
+  padding: 1rem;
+}
+
+.engagement-toggle {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  margin: 0;
+}
+
+.engagement-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
+.engagement-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.engagement-icon {
+  font-size: 1.5rem;
+}
+
+.engagement-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.engagement-name {
+  font-weight: 500;
+  color: var(--color-text-primary, #2c3e50);
+}
+
+.engagement-description {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #7f8c8d);
+}
+
+/* Rate Input Section */
+.rate-input-section {
+  padding: 0 1rem 1rem 1rem;
+  border-top: 1px solid var(--color-border-light, #e1e5e9);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.rate-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rate-label {
+  font-size: 0.875rem;
+  color: var(--color-text-primary, #2c3e50);
+  font-weight: 500;
+  margin: 0;
+}
+
+.rate-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.currency-symbol {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--color-text-secondary, #7f8c8d);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.rate-input {
+  padding: 0.75rem 0.75rem 0.75rem 2rem;
+  border: 1px solid var(--color-border-input, #ddd);
+  border-radius: 6px;
+  font-size: 1rem;
+  width: 100%;
+  background: var(--color-background-card, #ffffff);
+}
+
+.rate-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #3498db);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha, rgba(52, 152, 219, 0.1));
+}
+
+.rate-guidance {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.rate-guidance.below {
+  background: var(--color-warning-light, #fff3cd);
+  color: var(--color-warning-dark, #856404);
+}
+
+.rate-guidance.above {
+  background: var(--color-success-light, #d4edda);
+  color: var(--color-success-dark, #155724);
+}
+
+.rate-guidance.average {
+  background: var(--color-info-light, #e3f2fd);
+  color: var(--color-info-dark, #1565c0);
+}
+
+/* Market Guidance */
+.market-guidance h5 {
+  margin: 0 0 0.5rem 0;
+  color: var(--color-text-primary, #2c3e50);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.range-bar {
+  display: flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-light, #e1e5e9);
+}
+
+.range-segment {
+  flex: 1;
+  text-align: center;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.range-segment.min {
+  background: var(--color-danger-light, #ffebee);
+  color: var(--color-danger-dark, #c62828);
+}
+
+.range-segment.avg {
+  background: var(--color-warning-light, #fff3cd);
+  color: var(--color-warning-dark, #856404);
+}
+
+.range-segment.max {
+  background: var(--color-success-light, #d4edda);
+  color: var(--color-success-dark, #155724);
+}
+
+.range-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.range-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Blackout Dates */
+.blackout-dates {
+  margin-top: 1rem;
+}
+
+.blackout-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.blackout-header h4 {
+  margin: 0;
+  color: var(--color-text-primary, #2c3e50);
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.add-blackout-btn {
+  padding: 0.5rem 1rem;
+  background: var(--color-primary, #3498db);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-blackout-btn:hover {
+  background: var(--color-primary-dark, #2980b9);
+}
+
+.add-blackout-btn.active {
+  background: var(--color-danger, #e74c3c);
+}
+
+.add-blackout-btn.active:hover {
+  background: var(--color-danger-dark, #c0392b);
+}
+
+/* Calendar */
+.calendar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.availability-calendar {
+  border: 1px solid var(--color-border-light, #e1e5e9);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.availability-calendar .react-calendar__tile {
+  position: relative;
+  border-radius: 4px;
+}
+
+.availability-calendar .blackout-date {
+  background: var(--color-danger-light, #ffebee) !important;
+  color: var(--color-danger-dark, #c62828) !important;
+}
+
+.availability-calendar .selected-range {
+  background: var(--color-primary-light, #ecf5ff) !important;
+  color: var(--color-primary-dark, #2980b9) !important;
+}
+
+/* Range Actions */
+.range-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.selected-range-info {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #7f8c8d);
+}
+
+.confirm-range-btn {
+  padding: 0.5rem 1rem;
+  background: var(--color-success, #27ae60);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.confirm-range-btn:hover {
+  background: var(--color-success-dark, #229954);
+}
+
+/* Blackout List */
+.blackout-list {
+  margin-top: 1rem;
+}
+
+.blackout-list h5 {
+  margin: 0 0 0.75rem 0;
+  color: var(--color-text-primary, #2c3e50);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.blackout-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: var(--color-background-alt, #f8f9fa);
+  border: 1px solid var(--color-border-light, #e1e5e9);
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.blackout-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.blackout-dates {
+  font-weight: 500;
+  color: var(--color-text-primary, #2c3e50);
+}
+
+.blackout-reason {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary, #7f8c8d);
+}
+
+.remove-blackout {
+  padding: 0.375rem 0.75rem;
+  background: var(--color-danger, #e74c3c);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.remove-blackout:hover {
+  background: var(--color-danger-dark, #c0392b);
+}
+
+/* Booking Preferences */
+.preferences-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.form-field label {
+  color: var(--color-text-primary, #2c3e50);
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.form-field select {
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-input, #ddd);
+  border-radius: 6px;
+  font-size: 1rem;
+  background: var(--color-background-card, #ffffff);
+  color: var(--color-text-primary, #2c3e50);
+}
+
+.form-field select:focus {
+  outline: none;
+  border-color: var(--color-primary, #3498db);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha, rgba(52, 152, 219, 0.1));
+}
+
+.checkbox-field {
+  margin-top: 1rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  margin: 0;
+  font-weight: 500;
+  color: var(--color-text-primary, #2c3e50);
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin: 0;
+}
+
+.field-description {
+  margin: 0.375rem 0 0 0;
+  color: var(--color-text-secondary, #7f8c8d);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* Validation Message */
+.validation-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--color-info-light, #e3f2fd);
+  border: 1px solid var(--color-info, #2196f3);
+  border-radius: 6px;
+  color: var(--color-info-dark, #1565c0);
+  font-size: 0.875rem;
+}
+
+.validation-icon {
+  font-size: 1rem;
+}
+
+/* Form Actions */
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: var(--color-background-card, #ffffff);
+  border-radius: 8px;
+  border: 1px solid var(--color-border-light, #e1e5e9);
+}
+
+.button {
+  padding: 0.75rem 2rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.button.primary {
+  background: var(--color-primary, #3498db);
+  color: white;
+}
+
+.button.primary:hover:not(:disabled) {
+  background: var(--color-primary-dark, #2980b9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.button.secondary {
+  background: var(--color-background-card, #ffffff);
+  color: var(--color-text-secondary, #7f8c8d);
+  border: 1px solid var(--color-border-light, #e1e5e9);
+}
+
+.button.secondary:hover:not(:disabled) {
+  background: var(--color-background-alt, #f8f9fa);
+  border-color: var(--color-border-input-hover, #bbb);
+}
+
+.button.ghost {
+  background: transparent;
+  color: var(--color-text-tertiary, #95a5a6);
+  border: 1px solid transparent;
+}
+
+.button.ghost:hover:not(:disabled) {
+  color: var(--color-text-secondary, #7f8c8d);
+  background: var(--color-background-alt, #f8f9fa);
+}
+
+/* Form Error */
+.form-error {
+  padding: 1rem;
+  background: var(--color-danger-light, #ffebee);
+  border: 1px solid var(--color-danger, #e74c3c);
+  border-radius: 6px;
+  color: var(--color-danger-dark, #c62828);
+  font-size: 0.875rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .availability-step {
+    padding: 0 1rem;
+  }
+
+  .schedule-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .time-slot {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .rate-input-section {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .preferences-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .blackout-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .button {
+    width: 100%;
+    min-width: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-section {
+    padding: 1rem;
+  }
+
+  .engagement-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .schedule-day {
+    margin-bottom: 0.75rem;
+  }
+
+  .time-slot {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .availability-calendar {
+    padding: 0.75rem;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background-card: #2c3e50;
+    --color-background-alt: #34495e;
+    --color-text-primary: #ecf0f1;
+    --color-text-secondary: #bdc3c7;
+    --color-text-tertiary: #95a5a6;
+    --color-border-light: #4a5a6a;
+    --color-border-input: #4a5a6a;
+    --color-border-input-hover: #5a6a7a;
+  }
+
+  .availability-calendar {
+    background: var(--color-background-card);
+    color: var(--color-text-primary);
+  }
+
+  .availability-calendar .react-calendar__navigation button {
+    color: var(--color-text-primary);
+  }
+
+  .availability-calendar .react-calendar__tile {
+    color: var(--color-text-primary);
+  }
+
+  .availability-calendar .react-calendar__tile:hover {
+    background: var(--color-background-alt);
+  }
+}
