@@ -161,6 +161,7 @@ export const BookingDashboard: React.FC<BookingDashboardProps> = ({
             onSubmit={handleCreateBooking}
             onCancel={() => setShowCreateForm(false)}
             loading={loading}
+            enableCalendarIntegration={true}
           />
         </div>
       )}

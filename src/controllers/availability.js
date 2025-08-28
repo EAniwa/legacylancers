@@ -5,10 +5,7 @@
 
 const { Availability, AvailabilityValidationError } = require('../models/Availability');
 const { calendarService } = require('../services/calendar');
-
-// In-memory storage for rapid development (will be replaced with database)
-let availabilityStore = new Map();
-let nextId = 1;
+const { getDatabase } = require('../config/database');
 
 /**
  * Controller Error Class
@@ -23,11 +20,139 @@ class AvailabilityControllerError extends Error {
 }
 
 /**
- * Generate unique ID
- * @returns {string} Unique ID
+ * Save availability to database
+ * @param {Availability} availability - Availability object to save
+ * @returns {Promise<Object>} Saved availability with ID
  */
-function generateId() {
-  return (nextId++).toString();
+async function saveAvailability(availability) {
+  const db = getDatabase();
+  const query = `
+    INSERT INTO availability (
+      user_id, title, description, category, start_time, end_time, date,
+      time_zone, is_recurring, recurring_pattern, max_bookings, 
+      current_bookings, hourly_rate, currency, tags, status, 
+      advance_notice_hours, buffer_minutes, created_by
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+    RETURNING *
+  `;
+  
+  const result = await db.query(query, [
+    availability.userId, availability.title, availability.description,
+    availability.category, availability.startTime, availability.endTime,
+    availability.date, availability.timeZone, availability.isRecurring,
+    availability.recurringPattern, availability.maxBookings,
+    availability.currentBookings, availability.hourlyRate, availability.currency,
+    availability.tags, availability.status, availability.advanceNoticeHours,
+    availability.bufferMinutes, availability.createdBy
+  ]);
+  
+  return result.rows[0];
+}
+
+/**
+ * Convert database row to Availability object
+ * @param {Object} row - Database row
+ * @returns {Availability} Availability object
+ */
+function dbRowToAvailability(row) {
+  return new Availability({
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    date: row.date,
+    timeZone: row.time_zone,
+    isRecurring: row.is_recurring,
+    recurringPattern: row.recurring_pattern,
+    maxBookings: row.max_bookings,
+    currentBookings: row.current_bookings,
+    hourlyRate: row.hourly_rate,
+    currency: row.currency,
+    tags: row.tags,
+    status: row.status,
+    advanceNoticeHours: row.advance_notice_hours,
+    bufferMinutes: row.buffer_minutes,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  });
+}
+
+/**
+ * Get availabilities from database with filters
+ * @param {Object} filters - Query filters
+ * @returns {Promise<Array>} Array of availability objects
+ */
+async function getAvailabilitiesFromDb(filters) {
+  const db = getDatabase();
+  
+  let query = `
+    SELECT * FROM availability 
+    WHERE 1=1
+  `;
+  const params = [];
+  let paramCount = 0;
+
+  // User filter
+  if (filters.userId) {
+    paramCount++;
+    query += ` AND user_id = $${paramCount}`;
+    params.push(filters.userId);
+  }
+
+  // Status filter
+  if (filters.status && filters.status !== 'all') {
+    paramCount++;
+    query += ` AND status = $${paramCount}`;
+    params.push(filters.status);
+  }
+
+  // Category filter
+  if (filters.category) {
+    paramCount++;
+    query += ` AND category = $${paramCount}`;
+    params.push(filters.category);
+  }
+
+  // Date range filter
+  if (filters.startDate && filters.endDate) {
+    paramCount++;
+    query += ` AND (date IS NULL OR date BETWEEN $${paramCount} AND $${paramCount + 1})`;
+    params.push(filters.startDate, filters.endDate);
+    paramCount++;
+  }
+
+  // Tags filter (PostgreSQL array contains)
+  if (filters.tags && filters.tags.length > 0) {
+    paramCount++;
+    query += ` AND tags && $${paramCount}::text[]`;
+    params.push(filters.tags);
+  }
+
+  // Sorting
+  const validSortFields = ['start_time', 'end_time', 'date', 'created_at'];
+  const sortBy = validSortFields.includes(filters.sortBy) ? filters.sortBy : 'start_time';
+  const sortOrder = filters.sortOrder === 'desc' ? 'DESC' : 'ASC';
+  query += ` ORDER BY ${sortBy} ${sortOrder}`;
+
+  // Pagination
+  if (filters.limit) {
+    paramCount++;
+    query += ` LIMIT $${paramCount}`;
+    params.push(filters.limit);
+
+    if (filters.offset) {
+      paramCount++;
+      query += ` OFFSET $${paramCount}`;
+      params.push(filters.offset);
+    }
+  }
+
+  const result = await db.query(query, params);
+  return result.rows.map(dbRowToAvailability);
 }
 
 /**
@@ -40,10 +165,7 @@ async function createAvailability(req, res) {
     const availabilityData = {
       ...req.body,
       userId: req.user.id, // Set from authenticated user
-      createdBy: req.user.id,
-      id: generateId(),
-      createdAt: new Date(),
-      updatedAt: new Date()
+      createdBy: req.user.id
     };
 
     // Create and validate availability
@@ -67,13 +189,39 @@ async function createAvailability(req, res) {
       });
     }
 
-    // Store availability
-    availabilityStore.set(availability.id, availability);
+    // Save to database
+    const savedAvailability = await saveAvailability(availability);
+    
+    // Convert database result back to Availability object for response
+    const responseAvailability = new Availability({
+      id: savedAvailability.id,
+      userId: savedAvailability.user_id,
+      title: savedAvailability.title,
+      description: savedAvailability.description,
+      category: savedAvailability.category,
+      startTime: savedAvailability.start_time,
+      endTime: savedAvailability.end_time,
+      date: savedAvailability.date,
+      timeZone: savedAvailability.time_zone,
+      isRecurring: savedAvailability.is_recurring,
+      recurringPattern: savedAvailability.recurring_pattern,
+      maxBookings: savedAvailability.max_bookings,
+      currentBookings: savedAvailability.current_bookings,
+      hourlyRate: savedAvailability.hourly_rate,
+      currency: savedAvailability.currency,
+      tags: savedAvailability.tags,
+      status: savedAvailability.status,
+      advanceNoticeHours: savedAvailability.advance_notice_hours,
+      bufferMinutes: savedAvailability.buffer_minutes,
+      createdBy: savedAvailability.created_by,
+      createdAt: savedAvailability.created_at,
+      updatedAt: savedAvailability.updated_at
+    });
 
     res.status(201).json({
       success: true,
       message: 'Availability created successfully',
-      data: availability.toJSON()
+      data: responseAvailability.toJSON()
     });
 
   } catch (error) {
@@ -121,34 +269,34 @@ async function getAvailabilities(req, res) {
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.max(1, Math.min(100, parseInt(limit)));
     const includeRecurringInstances = includeInstances === 'true';
+    const offset = (pageNum - 1) * limitNum;
 
-    // Filter availabilities
-    let availabilities = Array.from(availabilityStore.values());
+    // Build filters for database query
+    const filters = {
+      status,
+      category,
+      startDate,
+      endDate,
+      sortBy,
+      sortOrder,
+      limit: limitNum,
+      offset
+    };
 
     // User filter (own slots or admin can see all)
     if (req.user.role !== 'admin') {
-      availabilities = availabilities.filter(a => a.userId === req.user.id);
+      filters.userId = req.user.id;
     } else if (userId) {
-      availabilities = availabilities.filter(a => a.userId === userId);
-    }
-
-    // Status filter
-    if (status !== 'all') {
-      availabilities = availabilities.filter(a => a.status === status);
-    }
-
-    // Category filter
-    if (category) {
-      availabilities = availabilities.filter(a => a.category === category);
+      filters.userId = userId;
     }
 
     // Tags filter
     if (tags) {
-      const tagList = Array.isArray(tags) ? tags : tags.split(',');
-      availabilities = availabilities.filter(a => 
-        tagList.some(tag => a.tags.includes(tag.trim()))
-      );
+      filters.tags = Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim());
     }
+
+    // Get availabilities from database
+    const availabilities = await getAvailabilitiesFromDb(filters);
 
     // Generate recurring instances if requested
     let results = [];
@@ -173,59 +321,36 @@ async function getAvailabilities(req, res) {
           }
         }
       }
+      
+      // Sort instances
+      results.sort((a, b) => {
+        const dateA = a.date || '9999-12-31';
+        const dateB = b.date || '9999-12-31';
+        
+        if (dateA !== dateB) {
+          return dateA.localeCompare(dateB);
+        }
+        
+        return a.startTime.localeCompare(b.startTime);
+      });
+
     } else {
       results = availabilities.map(a => a.toJSON());
     }
 
-    // Date range filter for non-instance results
-    if (startDate && endDate && !includeRecurringInstances) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      results = results.filter(a => {
-        if (!a.date) return true; // No specific date
-        const availDate = new Date(a.date);
-        return availDate >= start && availDate <= end;
-      });
-    }
-
-    // Sort results
-    results.sort((a, b) => {
-      let aVal, bVal;
-      
-      switch (sortBy) {
-        case 'startTime':
-          aVal = a.startTime;
-          bVal = b.startTime;
-          break;
-        case 'endTime':
-          aVal = a.endTime;
-          bVal = b.endTime;
-          break;
-        case 'date':
-          aVal = a.date || '9999-12-31';
-          bVal = b.date || '9999-12-31';
-          break;
-        case 'createdAt':
-          aVal = new Date(a.createdAt);
-          bVal = new Date(b.createdAt);
-          break;
-        default:
-          aVal = a[sortBy];
-          bVal = b[sortBy];
-      }
-
-      if (sortOrder === 'desc') {
-        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-      }
-      return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+    // For paginated results, get total count
+    const totalCountQuery = await getAvailabilitiesFromDb({ 
+      ...filters, 
+      limit: null, 
+      offset: null 
     });
-
-    // Pagination
-    const total = results.length;
+    const total = includeRecurringInstances ? results.length : totalCountQuery.length;
     const totalPages = Math.ceil(total / limitNum);
-    const offset = (pageNum - 1) * limitNum;
-    const paginatedResults = results.slice(offset, offset + limitNum);
+
+    // Apply pagination for instances (already paginated for regular results)
+    const paginatedResults = includeRecurringInstances 
+      ? results.slice(offset, offset + limitNum)
+      : results;
 
     res.json({
       success: true,
@@ -239,7 +364,7 @@ async function getAvailabilities(req, res) {
         hasPrev: pageNum > 1
       },
       filters: {
-        userId,
+        userId: filters.userId,
         startDate,
         endDate,
         category,
@@ -267,15 +392,19 @@ async function getAvailabilities(req, res) {
 async function getAvailabilityById(req, res) {
   try {
     const { id } = req.params;
-    const availability = availabilityStore.get(id);
-
-    if (!availability) {
+    const db = getDatabase();
+    
+    const result = await db.query('SELECT * FROM availability WHERE id = $1', [id]);
+    
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Availability not found',
         code: 'NOT_FOUND'
       });
     }
+
+    const availability = dbRowToAvailability(result.rows[0]);
 
     // Check ownership (users can only see their own, admins can see all)
     if (req.user.role !== 'admin' && availability.userId !== req.user.id) {
@@ -598,13 +727,35 @@ async function checkAvailabilityConflicts(req, res) {
  * @returns {Array<Availability>} Conflicting availabilities
  */
 async function checkConflicts(availability, excludeId = null) {
-  const conflicts = [];
+  const db = getDatabase();
   
-  // Get all availabilities for the same user
-  const userAvailabilities = Array.from(availabilityStore.values())
-    .filter(a => a.userId === availability.userId && a.id !== excludeId);
+  let query = `
+    SELECT * FROM availability 
+    WHERE user_id = $1 
+    AND status = 'active'
+  `;
+  const params = [availability.userId];
+  let paramCount = 1;
 
-  for (const existing of userAvailabilities) {
+  if (excludeId) {
+    paramCount++;
+    query += ` AND id != $${paramCount}`;
+    params.push(excludeId);
+  }
+
+  // For non-recurring availability with specific dates
+  if (availability.date && !availability.isRecurring) {
+    paramCount++;
+    query += ` AND (date = $${paramCount} OR date IS NULL OR is_recurring = true)`;
+    params.push(availability.date);
+  }
+
+  const result = await db.query(query, params);
+  const conflicts = [];
+
+  for (const row of result.rows) {
+    const existing = dbRowToAvailability(row);
+    
     // Skip if different dates (for non-recurring)
     if (availability.date && existing.date && availability.date !== existing.date) {
       continue;

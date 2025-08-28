@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
+import { format } from 'date-fns';
 import { Button } from '../ui/Button';
+import { AvailabilityPicker } from '../calendar/AvailabilityPicker';
+import { ConflictResolution } from '../calendar/ConflictResolution';
+import { calendarApi } from '../../services/calendarApi';
 import type { BookingRequest } from '../../services/bookingApi';
+import type { AvailabilitySlot, CalendarEvent } from '../../services/calendarApi';
 
 interface BookingRequestFormProps {
   retireeId: string;
   clientId: string;
-  onSubmit: (request: Omit<BookingRequest, 'id' | 'status' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  onSubmit: (request: Omit<BookingRequest, 'id' | 'status' | 'createdAt' | 'updatedAt'> & { availabilitySlotId?: string }) => Promise<void>;
   onCancel?: () => void;
   loading?: boolean;
+  enableCalendarIntegration?: boolean;
 }
 
 export const BookingRequestForm: React.FC<BookingRequestFormProps> = ({
@@ -16,13 +22,21 @@ export const BookingRequestForm: React.FC<BookingRequestFormProps> = ({
   onSubmit,
   onCancel,
   loading = false,
+  enableCalendarIntegration = false,
 }) => {
   const [formData, setFormData] = useState({
     serviceType: '',
     description: '',
     scheduledDate: '',
     budget: '',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
+
+  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [conflicts, setConflicts] = useState<CalendarEvent[]>([]);
+  const [showConflictResolver, setShowConflictResolver] = useState(false);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -77,6 +91,7 @@ export const BookingRequestForm: React.FC<BookingRequestFormProps> = ({
         description: '',
         scheduledDate: '',
         budget: '',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       setErrors({});
     } catch (error) {
@@ -92,8 +107,77 @@ export const BookingRequestForm: React.FC<BookingRequestFormProps> = ({
     }
   };
 
+  const handleSlotSelect = async (slot: AvailabilitySlot) => {
+    setSelectedSlot(slot);
+    setFormData(prev => ({
+      ...prev,
+      scheduledDate: slot.startTime,
+      timezone: slot.timezone,
+    }));
+    setShowCalendar(false);
+
+    // Check for conflicts
+    if (slot.startTime && slot.endTime) {
+      setCheckingAvailability(true);
+      try {
+        const result = await calendarApi.checkSlotAvailability(
+          retireeId,
+          slot.startTime,
+          slot.endTime,
+          slot.timezone
+        );
+
+        if (!result.available && result.conflicts.length > 0) {
+          setConflicts(result.conflicts);
+          setShowConflictResolver(true);
+        }
+      } catch (error) {
+        setError('availability', 'Failed to verify slot availability');
+      } finally {
+        setCheckingAvailability(false);
+      }
+    }
+  };
+
+  const handleConflictResolve = (alternativeSlot: AvailabilitySlot) => {
+    setSelectedSlot(alternativeSlot);
+    setFormData(prev => ({
+      ...prev,
+      scheduledDate: alternativeSlot.startTime,
+      timezone: alternativeSlot.timezone,
+    }));
+    setShowConflictResolver(false);
+    setConflicts([]);
+  };
+
+  const handleConflictCancel = () => {
+    setShowConflictResolver(false);
+    setConflicts([]);
+    setSelectedSlot(null);
+    setFormData(prev => ({ ...prev, scheduledDate: '', timezone: prev.timezone }));
+  };
+
+  const setError = (field: string, message: string) => {
+    setErrors(prev => ({ ...prev, [field]: message }));
+  };
+
   return (
-    <div className="bg-white p-6 rounded-lg shadow-lg">
+    <>
+      {/* Conflict Resolution Modal */}
+      {showConflictResolver && selectedSlot && conflicts.length > 0 && (
+        <ConflictResolution
+          userId={retireeId}
+          requestedStartTime={selectedSlot.startTime}
+          requestedEndTime={selectedSlot.endTime}
+          timezone={formData.timezone}
+          conflicts={conflicts}
+          onResolve={handleConflictResolve}
+          onCancel={handleConflictCancel}
+          isOpen={showConflictResolver}
+        />
+      )}
+
+      <div className="bg-white p-6 rounded-lg shadow-lg">
       <h3 className="text-lg font-semibold text-gray-900 mb-6">Request a Booking</h3>
       
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -149,6 +233,75 @@ export const BookingRequestForm: React.FC<BookingRequestFormProps> = ({
             </p>
           </div>
         </div>
+
+        {/* Calendar Integration Section */}
+        {enableCalendarIntegration && (
+          <div className="border-t pt-6">
+            <div className="flex justify-between items-center mb-4">
+              <label className="block text-sm font-medium text-gray-700">
+                Select Available Time Slot
+              </label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setShowCalendar(!showCalendar)}
+                disabled={loading || checkingAvailability}
+              >
+                {showCalendar ? 'Hide Calendar' : 'Browse Availability'}
+              </Button>
+            </div>
+
+            {selectedSlot && (
+              <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="text-sm font-medium text-green-800 mb-1">Selected Time Slot</h4>
+                    <p className="text-sm text-green-700">
+                      {format(new Date(selectedSlot.startTime), 'EEEE, MMMM d, yyyy')} <br />
+                      {format(new Date(selectedSlot.startTime), 'h:mm a')} - {format(new Date(selectedSlot.endTime), 'h:mm a')} <br />
+                      Rate: ${selectedSlot.rate}/hour • {selectedSlot.engagementType}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSlot(null);
+                      setFormData(prev => ({ ...prev, scheduledDate: '' }));
+                    }}
+                    className="text-green-600 hover:text-green-800"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {checkingAvailability && (
+              <div className="flex items-center text-sm text-blue-600 mb-4">
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Checking availability...
+              </div>
+            )}
+
+            {showCalendar && (
+              <div className="mb-6">
+                <AvailabilityPicker
+                  userId={retireeId}
+                  selectedSlot={selectedSlot || undefined}
+                  onSlotSelect={handleSlotSelect}
+                  timezone={formData.timezone}
+                  className="border border-gray-200 rounded-lg"
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -217,6 +370,7 @@ export const BookingRequestForm: React.FC<BookingRequestFormProps> = ({
           </Button>
         </div>
       </form>
-    </div>
+      </div>
+    </>
   );
 };

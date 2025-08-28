@@ -262,6 +262,235 @@ function sanitizeObject(obj, stringFields = [], options = {}) {
   return sanitized;
 }
 
+/**
+ * Calendar validation schemas
+ */
+const calendarValidation = {
+  getEvents: {
+    query: {
+      type: 'object',
+      properties: {
+        startDate: { type: 'string', format: 'date' },
+        endDate: { type: 'string', format: 'date' },
+        userId: { type: 'string' },
+        status: { type: 'string', enum: ['confirmed', 'tentative', 'cancelled', 'all'] },
+        source: { type: 'string', enum: ['booking', 'availability', 'manual', 'external'] },
+        visibility: { type: 'string', enum: ['public', 'private', 'internal', 'all'] },
+        includeBookings: { type: 'string', enum: ['true', 'false'] },
+        timeZone: { type: 'string' }
+      },
+      additionalProperties: false
+    }
+  },
+
+  createEvent: {
+    body: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 255 },
+        description: { type: 'string', maxLength: 2000 },
+        location: { type: 'string', maxLength: 255 },
+        startTime: { type: 'string', format: 'date-time' },
+        endTime: { type: 'string', format: 'date-time' },
+        timeZone: { type: 'string', default: 'UTC' },
+        isAllDay: { type: 'boolean', default: false },
+        isRecurring: { type: 'boolean', default: false },
+        recurringPattern: { 
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['daily', 'weekly', 'monthly'] },
+            interval: { type: 'integer', minimum: 1 },
+            endDate: { type: 'string', format: 'date' },
+            count: { type: 'integer', minimum: 1 }
+          }
+        },
+        bookingId: { type: 'integer' },
+        availabilityId: { type: 'integer' },
+        source: { type: 'string', enum: ['booking', 'availability', 'manual', 'external'], default: 'manual' },
+        visibility: { type: 'string', enum: ['public', 'private', 'internal'], default: 'private' },
+        meetingUrl: { type: 'string', format: 'uri' },
+        meetingId: { type: 'string' },
+        meetingPassword: { type: 'string' },
+        status: { type: 'string', enum: ['confirmed', 'tentative', 'cancelled'], default: 'confirmed' },
+        reminderMinutes: { 
+          type: 'array', 
+          items: { type: 'integer', minimum: 0 }
+        },
+        attendees: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', format: 'email' },
+              name: { type: 'string' },
+              status: { type: 'string', enum: ['accepted', 'declined', 'tentative', 'pending'] },
+              role: { type: 'string' }
+            },
+            required: ['email']
+          }
+        }
+      },
+      required: ['title', 'startTime', 'endTime'],
+      additionalProperties: false
+    }
+  },
+
+  getEventById: {
+    params: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', pattern: '^[0-9]+$' }
+      },
+      required: ['id'],
+      additionalProperties: false
+    }
+  },
+
+  updateEvent: {
+    params: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', pattern: '^[0-9]+$' }
+      },
+      required: ['id'],
+      additionalProperties: false
+    },
+    body: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 255 },
+        description: { type: 'string', maxLength: 2000 },
+        location: { type: 'string', maxLength: 255 },
+        startTime: { type: 'string', format: 'date-time' },
+        endTime: { type: 'string', format: 'date-time' },
+        timeZone: { type: 'string' },
+        isAllDay: { type: 'boolean' },
+        meetingUrl: { type: 'string', format: 'uri' },
+        meetingId: { type: 'string' },
+        meetingPassword: { type: 'string' },
+        status: { type: 'string', enum: ['confirmed', 'tentative', 'cancelled'] },
+        reminderMinutes: { 
+          type: 'array', 
+          items: { type: 'integer', minimum: 0 }
+        },
+        attendees: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', format: 'email' },
+              name: { type: 'string' },
+              status: { type: 'string', enum: ['accepted', 'declined', 'tentative', 'pending'] },
+              role: { type: 'string' }
+            },
+            required: ['email']
+          }
+        }
+      },
+      additionalProperties: false
+    }
+  },
+
+  deleteEvent: {
+    params: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', pattern: '^[0-9]+$' }
+      },
+      required: ['id'],
+      additionalProperties: false
+    }
+  },
+
+  convertTimezone: {
+    body: {
+      type: 'object',
+      properties: {
+        dateTime: { type: 'string', format: 'date-time' },
+        fromTimeZone: { type: 'string' },
+        toTimeZone: { type: 'string' }
+      },
+      required: ['dateTime', 'fromTimeZone', 'toTimeZone'],
+      additionalProperties: false
+    }
+  },
+
+  createEventFromBooking: {
+    params: {
+      type: 'object',
+      properties: {
+        bookingId: { type: 'string', pattern: '^[0-9]+$' }
+      },
+      required: ['bookingId'],
+      additionalProperties: false
+    }
+  },
+
+  updateEventFromBooking: {
+    params: {
+      type: 'object',
+      properties: {
+        bookingId: { type: 'string', pattern: '^[0-9]+$' }
+      },
+      required: ['bookingId'],
+      additionalProperties: false
+    }
+  },
+
+  cancelEventFromBooking: {
+    params: {
+      type: 'object',
+      properties: {
+        bookingId: { type: 'string', pattern: '^[0-9]+$' }
+      },
+      required: ['bookingId'],
+      additionalProperties: false
+    }
+  },
+
+  syncExternal: {
+    body: {
+      type: 'object',
+      properties: {
+        calendarProvider: { type: 'string', enum: ['google', 'outlook', 'apple'] },
+        accessToken: { type: 'string' },
+        refreshToken: { type: 'string' },
+        syncDirection: { type: 'string', enum: ['import', 'export', 'bidirectional'] }
+      },
+      required: ['calendarProvider', 'accessToken'],
+      additionalProperties: false
+    }
+  },
+
+  getAvailabilityCalendar: {
+    query: {
+      type: 'object',
+      properties: {
+        startDate: { type: 'string', format: 'date' },
+        endDate: { type: 'string', format: 'date' },
+        userId: { type: 'string' },
+        timeZone: { type: 'string' }
+      },
+      additionalProperties: false
+    }
+  },
+
+  blockTime: {
+    body: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 255 },
+        startTime: { type: 'string', format: 'date-time' },
+        endTime: { type: 'string', format: 'date-time' },
+        timeZone: { type: 'string', default: 'UTC' },
+        reason: { type: 'string' }
+      },
+      required: ['title', 'startTime', 'endTime'],
+      additionalProperties: false
+    }
+  }
+};
+
 module.exports = {
   validateRequest,
   validateUuidParam,
@@ -271,5 +500,7 @@ module.exports = {
   sanitizeString,
   sanitizeObject,
   commonSchemas,
+  calendarValidation,
+  validationMiddleware: validateRequest, // Alias for backward compatibility
   ValidationError
 };

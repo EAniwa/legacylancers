@@ -16,6 +16,7 @@ const skillsRoutes = require('./routes/api/skills');
 const uploadRoutes = require('./routes/api/upload');
 const availabilityRoutes = require('./routes/api/availability');
 const bookingRoutes = require('./routes/api/bookings');
+const calendarRoutes = require('./routes/api/calendar');
 const notificationRoutes = require('./routes/api/notifications');
 const publicProfileRoutes = require('./routes/public-profiles');
 
@@ -109,6 +110,7 @@ app.use('/api/skills', skillsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/calendar', calendarRoutes);
 app.use('/api/notifications', notificationRoutes);
 
 // Message routes (protected with auth)
