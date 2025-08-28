@@ -1,11 +1,12 @@
 /**
- * Booking Model
+ * Booking Model with PostgreSQL Database Integration
  * Handles booking database operations and business logic with state machine support
  */
 
 const { v4: uuidv4 } = require('uuid');
 const validator = require('validator');
 const { BookingStateMachine, BOOKING_STATES, BookingStateMachineError } = require('../utils/bookingStateMachine');
+const { getDatabase } = require('../config/database');
 
 class BookingError extends Error {
   constructor(message, code = 'BOOKING_ERROR') {
@@ -16,32 +17,33 @@ class BookingError extends Error {
 }
 
 /**
- * Booking Model Class
- * For now, using in-memory storage. In production, this would connect to PostgreSQL
+ * PostgreSQL-backed Booking Model Class
  */
-class Booking {
+class BookingDB {
   constructor() {
-    // In-memory storage for development/testing
-    // In production, this would be replaced with database connection
-    this.bookings = new Map();
-    this.bookingRequirements = new Map();
-    this.bookingHistory = new Map();
-    this.bookingAttachments = new Map();
+    this.db = null;
+  }
+
+  /**
+   * Initialize database connection
+   */
+  async init() {
+    this.db = getDatabase();
+    if (!this.db) {
+      throw new BookingError('Database not initialized', 'DB_NOT_INITIALIZED');
+    }
   }
 
   /**
    * Create a new booking
    * @param {Object} bookingData - Booking creation data
-   * @param {string} bookingData.clientId - Client user ID
-   * @param {string} bookingData.retireeId - Retiree user ID
-   * @param {string} bookingData.title - Booking title
-   * @param {string} bookingData.description - Booking description
-   * @param {string} bookingData.engagementType - Type of engagement
    * @param {string} createdBy - User ID creating the booking
    * @returns {Promise<Object>} Created booking object
    */
   async create(bookingData, createdBy) {
     try {
+      if (!this.db) await this.init();
+
       // Validate required fields
       const { clientId, retireeId, title, description } = bookingData;
 
@@ -82,81 +84,58 @@ class Booking {
         throw new BookingError('Invalid engagement type', 'INVALID_ENGAGEMENT_TYPE');
       }
 
-      // Create booking object
+      // Prepare booking data for database
       const bookingId = uuidv4();
-      const now = new Date();
       const initialState = BookingStateMachine.getInitialState();
 
-      const booking = {
-        id: bookingId,
-        client_id: clientId,
-        retiree_id: retireeId,
-        client_profile_id: bookingData.clientProfileId || null,
-        retiree_profile_id: bookingData.retireeProfileId || null,
-        title: this.sanitizeText(title),
-        description: this.sanitizeText(description),
-        service_category: bookingData.serviceCategory || null,
-        engagement_type: engagementType,
-        
-        // State management
-        status: initialState,
-        status_changed_at: now,
-        status_changed_by: createdBy,
-        
-        // Pricing
-        proposed_rate: this.validateRate(bookingData.proposedRate),
-        proposed_rate_type: bookingData.proposedRateType || 'hourly',
-        agreed_rate: null,
-        agreed_rate_type: null,
-        currency: bookingData.currency || 'USD',
-        
-        // Scheduling
-        start_date: this.validateDate(bookingData.startDate),
-        end_date: this.validateDate(bookingData.endDate),
-        estimated_hours: this.validateInteger(bookingData.estimatedHours),
-        flexible_timing: Boolean(bookingData.flexibleTiming),
-        timezone: bookingData.timezone || 'UTC',
-        
-        // Delivery
-        delivery_date: null,
-        completion_date: null,
-        
-        // Messages
-        client_message: this.sanitizeText(bookingData.clientMessage || ''),
-        retiree_response: null,
-        rejection_reason: null,
-        cancellation_reason: null,
-        
-        // Metadata
-        urgency_level: this.validateUrgencyLevel(bookingData.urgencyLevel),
-        remote_work: Boolean(bookingData.remoteWork !== false), // Default true
-        location: this.sanitizeText(bookingData.location || ''),
-        
-        // Ratings and feedback
-        client_rating: null,
-        retiree_rating: null,
-        client_feedback: null,
-        retiree_feedback: null,
-        
-        // Payment
-        payment_status: 'pending',
-        payment_reference: null,
-        
-        // Audit fields
-        created_at: now,
-        updated_at: now,
-        deleted_at: null
-      };
+      const insertQuery = `
+        INSERT INTO bookings (
+          id, client_id, retiree_id, client_profile_id, retiree_profile_id,
+          title, description, service_category, engagement_type,
+          status, status_changed_by, proposed_rate, proposed_rate_type,
+          currency, start_date, end_date, estimated_hours, flexible_timing,
+          timezone, client_message, urgency_level, remote_work, location
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+        )
+        RETURNING *
+      `;
+
+      const values = [
+        bookingId,
+        clientId,
+        retireeId,
+        bookingData.clientProfileId || null,
+        bookingData.retireeProfileId || null,
+        this.sanitizeText(title),
+        this.sanitizeText(description),
+        bookingData.serviceCategory || null,
+        engagementType,
+        initialState,
+        createdBy,
+        this.validateRate(bookingData.proposedRate),
+        bookingData.proposedRateType || 'hourly',
+        bookingData.currency || 'USD',
+        this.validateDate(bookingData.startDate),
+        this.validateDate(bookingData.endDate),
+        this.validateInteger(bookingData.estimatedHours),
+        Boolean(bookingData.flexibleTiming),
+        bookingData.timezone || 'UTC',
+        this.sanitizeText(bookingData.clientMessage || ''),
+        this.validateUrgencyLevel(bookingData.urgencyLevel),
+        Boolean(bookingData.remoteWork !== false),
+        this.sanitizeText(bookingData.location || '')
+      ];
 
       // Validate dates if provided
-      if (booking.start_date && booking.end_date) {
-        if (booking.start_date > booking.end_date) {
+      if (values[15] && values[16]) { // start_date and end_date
+        if (values[15] > values[16]) {
           throw new BookingError('Start date cannot be after end date', 'INVALID_DATE_RANGE');
         }
       }
 
-      // Store booking
-      this.bookings.set(bookingId, booking);
+      const result = await this.db.query(insertQuery, values);
+      const booking = result.rows[0];
 
       // Create initial history entry
       await this.addHistoryEntry(bookingId, {
@@ -193,12 +172,16 @@ class Booking {
    */
   async findById(bookingId) {
     try {
-      const booking = this.bookings.get(bookingId);
-      if (!booking || booking.deleted_at) {
-        return null;
-      }
+      if (!this.db) await this.init();
 
-      return { ...booking };
+      const query = `
+        SELECT * FROM bookings 
+        WHERE id = $1 AND deleted_at IS NULL
+      `;
+
+      const result = await this.db.query(query, [bookingId]);
+      return result.rows.length > 0 ? result.rows[0] : null;
+
     } catch (error) {
       throw new BookingError(`Failed to find booking: ${error.message}`, 'FIND_FAILED');
     }
@@ -212,60 +195,93 @@ class Booking {
    */
   async findByCriteria(criteria = {}, options = {}) {
     try {
-      let bookings = Array.from(this.bookings.values()).filter(booking => !booking.deleted_at);
-      
-      // Apply filters
+      if (!this.db) await this.init();
+
+      let whereConditions = ['deleted_at IS NULL'];
+      let queryParams = [];
+      let paramIndex = 1;
+
+      // Build WHERE conditions
       if (criteria.clientId) {
-        bookings = bookings.filter(b => b.client_id === criteria.clientId);
+        whereConditions.push(`client_id = $${paramIndex}`);
+        queryParams.push(criteria.clientId);
+        paramIndex++;
       }
-      
+
       if (criteria.retireeId) {
-        bookings = bookings.filter(b => b.retiree_id === criteria.retireeId);
+        whereConditions.push(`retiree_id = $${paramIndex}`);
+        queryParams.push(criteria.retireeId);
+        paramIndex++;
       }
-      
+
       if (criteria.status) {
         const statuses = Array.isArray(criteria.status) ? criteria.status : [criteria.status];
-        bookings = bookings.filter(b => statuses.includes(b.status));
+        const statusPlaceholders = statuses.map(() => `$${paramIndex++}`).join(',');
+        whereConditions.push(`status IN (${statusPlaceholders})`);
+        queryParams.push(...statuses);
       }
-      
+
       if (criteria.engagementType) {
-        bookings = bookings.filter(b => b.engagement_type === criteria.engagementType);
+        whereConditions.push(`engagement_type = $${paramIndex}`);
+        queryParams.push(criteria.engagementType);
+        paramIndex++;
       }
-      
+
       if (criteria.serviceCategory) {
-        bookings = bookings.filter(b => b.service_category === criteria.serviceCategory);
+        whereConditions.push(`service_category = $${paramIndex}`);
+        queryParams.push(criteria.serviceCategory);
+        paramIndex++;
       }
-      
+
       if (criteria.startDate) {
-        bookings = bookings.filter(b => b.start_date && b.start_date >= new Date(criteria.startDate));
+        whereConditions.push(`start_date >= $${paramIndex}`);
+        queryParams.push(criteria.startDate);
+        paramIndex++;
       }
-      
+
       if (criteria.endDate) {
-        bookings = bookings.filter(b => b.end_date && b.end_date <= new Date(criteria.endDate));
+        whereConditions.push(`end_date <= $${paramIndex}`);
+        queryParams.push(criteria.endDate);
+        paramIndex++;
       }
 
-      // Apply sorting
+      // Build ORDER BY
       const sortBy = options.sortBy || 'created_at';
-      const sortOrder = options.sortOrder === 'asc' ? 1 : -1;
-      
-      bookings.sort((a, b) => {
-        const aVal = a[sortBy];
-        const bVal = b[sortBy];
-        
-        if (aVal < bVal) return -sortOrder;
-        if (aVal > bVal) return sortOrder;
-        return 0;
-      });
+      const sortOrder = options.sortOrder === 'asc' ? 'ASC' : 'DESC';
+      const orderBy = `ORDER BY ${sortBy} ${sortOrder}`;
 
-      // Apply pagination
-      const total = bookings.length;
-      const limit = Math.max(1, Math.min(100, options.limit || 20)); // Max 100, default 20
+      // Pagination
+      const limit = Math.max(1, Math.min(100, options.limit || 20));
       const offset = Math.max(0, options.offset || 0);
-      
-      const paginatedBookings = bookings.slice(offset, offset + limit);
+
+      // Count query
+      const countQuery = `
+        SELECT COUNT(*) as total
+        FROM bookings
+        WHERE ${whereConditions.join(' AND ')}
+      `;
+
+      // Data query
+      const dataQuery = `
+        SELECT *
+        FROM bookings
+        WHERE ${whereConditions.join(' AND ')}
+        ${orderBy}
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      `;
+
+      queryParams.push(limit, offset);
+
+      // Execute both queries
+      const [countResult, dataResult] = await Promise.all([
+        this.db.query(countQuery, queryParams.slice(0, -2)),
+        this.db.query(dataQuery, queryParams)
+      ]);
+
+      const total = parseInt(countResult.rows[0].total);
 
       return {
-        bookings: paginatedBookings,
+        bookings: dataResult.rows,
         pagination: {
           total,
           limit,
@@ -289,6 +305,8 @@ class Booking {
    */
   async updateStatus(bookingId, newStatus, userId, updateData = {}) {
     try {
+      if (!this.db) await this.init();
+
       const booking = await this.findById(bookingId);
       if (!booking) {
         throw new BookingError('Booking not found', 'BOOKING_NOT_FOUND');
@@ -313,69 +331,87 @@ class Booking {
         throw new BookingError(validation.error, validation.code);
       }
 
-      // Apply updates
-      const now = new Date();
-      const updatedBooking = {
-        ...booking,
-        status: newStatus,
-        status_changed_at: now,
-        status_changed_by: userId,
-        updated_at: now,
-        ...updateData
-      };
+      // Prepare update fields
+      const updateFields = [];
+      const updateValues = [];
+      let paramIndex = 1;
+
+      updateFields.push(`status = $${paramIndex++}`);
+      updateValues.push(newStatus);
+      
+      updateFields.push(`status_changed_at = CURRENT_TIMESTAMP`);
+      updateFields.push(`status_changed_by = $${paramIndex++}`);
+      updateValues.push(userId);
+      
+      updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
 
       // State-specific updates
       switch (newStatus) {
         case BOOKING_STATES.ACCEPTED:
           if (updateData.agreed_rate) {
-            updatedBooking.agreed_rate = this.validateRate(updateData.agreed_rate);
+            updateFields.push(`agreed_rate = $${paramIndex++}`);
+            updateValues.push(this.validateRate(updateData.agreed_rate));
           }
           if (updateData.agreed_rate_type) {
-            updatedBooking.agreed_rate_type = updateData.agreed_rate_type;
+            updateFields.push(`agreed_rate_type = $${paramIndex++}`);
+            updateValues.push(updateData.agreed_rate_type);
           }
           break;
           
         case BOOKING_STATES.REJECTED:
           if (updateData.rejection_reason) {
-            updatedBooking.rejection_reason = this.sanitizeText(updateData.rejection_reason);
+            updateFields.push(`rejection_reason = $${paramIndex++}`);
+            updateValues.push(this.sanitizeText(updateData.rejection_reason));
           }
           break;
           
         case BOOKING_STATES.ACTIVE:
-          if (!updatedBooking.start_date) {
-            updatedBooking.start_date = new Date();
+          if (!booking.start_date) {
+            updateFields.push(`start_date = CURRENT_DATE`);
           }
           break;
           
         case BOOKING_STATES.DELIVERED:
-          updatedBooking.delivery_date = new Date();
+          updateFields.push(`delivery_date = CURRENT_DATE`);
           break;
           
         case BOOKING_STATES.COMPLETED:
-          updatedBooking.completion_date = new Date();
+          updateFields.push(`completion_date = CURRENT_DATE`);
           break;
           
         case BOOKING_STATES.CANCELLED:
           if (updateData.cancellation_reason) {
-            updatedBooking.cancellation_reason = this.sanitizeText(updateData.cancellation_reason);
+            updateFields.push(`cancellation_reason = $${paramIndex++}`);
+            updateValues.push(this.sanitizeText(updateData.cancellation_reason));
           }
           break;
       }
 
-      // Store updated booking
-      this.bookings.set(bookingId, updatedBooking);
+      // Update query
+      const updateQuery = `
+        UPDATE bookings 
+        SET ${updateFields.join(', ')}
+        WHERE id = $${paramIndex}
+        RETURNING *
+      `;
+      updateValues.push(bookingId);
 
-      // Add history entry
-      await this.addHistoryEntry(bookingId, {
-        event_type: 'status_change',
-        from_status: booking.status,
-        to_status: newStatus,
-        event_title: `Booking ${newStatus}`,
-        event_description: validation.description || `Booking status changed to ${newStatus}`,
-        actor_id: userId,
-        actor_role: userRole,
-        metadata: updateData
-      });
+      const result = await this.db.query(updateQuery, updateValues);
+      const updatedBooking = result.rows[0];
+
+      // Add history entry (the trigger will handle automatic status change history)
+      if (validation.description) {
+        await this.addHistoryEntry(bookingId, {
+          event_type: 'status_change',
+          from_status: booking.status,
+          to_status: newStatus,
+          event_title: `Booking ${newStatus}`,
+          event_description: validation.description,
+          actor_id: userId,
+          actor_role: userRole,
+          metadata: updateData
+        });
+      }
 
       return updatedBooking;
 
@@ -396,6 +432,8 @@ class Booking {
    */
   async update(bookingId, updateData, userId) {
     try {
+      if (!this.db) await this.init();
+
       const booking = await this.findById(bookingId);
       if (!booking) {
         throw new BookingError('Booking not found', 'BOOKING_NOT_FOUND');
@@ -434,16 +472,28 @@ class Booking {
       // Validate and sanitize updates
       const validatedUpdates = await this.validateUpdateData(filteredUpdates);
 
-      // Apply updates
-      const now = new Date();
-      const updatedBooking = {
-        ...booking,
-        ...validatedUpdates,
-        updated_at: now
-      };
+      // Build update query
+      const updateFields = [];
+      const updateValues = [];
+      let paramIndex = 1;
 
-      // Store updated booking
-      this.bookings.set(bookingId, updatedBooking);
+      for (const [field, value] of Object.entries(validatedUpdates)) {
+        updateFields.push(`${field} = $${paramIndex++}`);
+        updateValues.push(value);
+      }
+
+      updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+
+      const updateQuery = `
+        UPDATE bookings 
+        SET ${updateFields.join(', ')}
+        WHERE id = $${paramIndex}
+        RETURNING *
+      `;
+      updateValues.push(bookingId);
+
+      const result = await this.db.query(updateQuery, updateValues);
+      const updatedBooking = result.rows[0];
 
       // Add history entry for significant changes
       const significantFields = ['proposed_rate', 'agreed_rate', 'start_date', 'end_date'];
@@ -478,6 +528,8 @@ class Booking {
    */
   async delete(bookingId, userId) {
     try {
+      if (!this.db) await this.init();
+
       const booking = await this.findById(bookingId);
       if (!booking) {
         throw new BookingError('Booking not found', 'BOOKING_NOT_FOUND');
@@ -491,15 +543,14 @@ class Booking {
         throw new BookingError('Cannot delete booking in current state', 'DELETE_NOT_ALLOWED');
       }
 
-      // Soft delete
-      const now = new Date();
-      const updatedBooking = {
-        ...booking,
-        deleted_at: now,
-        updated_at: now
-      };
+      const deleteQuery = `
+        UPDATE bookings 
+        SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING *
+      `;
 
-      this.bookings.set(bookingId, updatedBooking);
+      await this.db.query(deleteQuery, [bookingId]);
 
       // Add history entry
       await this.addHistoryEntry(bookingId, {
@@ -528,40 +579,43 @@ class Booking {
    */
   async addRequirement(bookingId, requirementData) {
     try {
+      if (!this.db) await this.init();
+
       const booking = await this.findById(bookingId);
       if (!booking) {
         throw new BookingError('Booking not found', 'BOOKING_NOT_FOUND');
       }
 
       const requirementId = uuidv4();
-      const now = new Date();
 
-      const requirement = {
-        id: requirementId,
-        booking_id: bookingId,
-        requirement_type: requirementData.requirement_type || 'other',
-        title: this.sanitizeText(requirementData.title || ''),
-        description: this.sanitizeText(requirementData.description || ''),
-        is_mandatory: Boolean(requirementData.is_mandatory !== false),
-        priority: this.validateInteger(requirementData.priority, 0),
-        skill_id: requirementData.skill_id || null,
-        required_proficiency: requirementData.required_proficiency || null,
-        min_years_experience: this.validateInteger(requirementData.min_years_experience),
-        deliverable_format: requirementData.deliverable_format || null,
-        expected_quantity: this.validateInteger(requirementData.expected_quantity, 1),
-        is_met: false,
-        met_at: null,
-        verified_by: null,
-        verification_notes: null,
-        created_at: now,
-        updated_at: now,
-        deleted_at: null
-      };
+      const insertQuery = `
+        INSERT INTO booking_requirements (
+          id, booking_id, requirement_type, title, description, is_mandatory,
+          priority, skill_id, required_proficiency, min_years_experience,
+          deliverable_format, expected_quantity
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+        )
+        RETURNING *
+      `;
 
-      // Store requirement
-      this.bookingRequirements.set(requirementId, requirement);
+      const values = [
+        requirementId,
+        bookingId,
+        requirementData.requirement_type || 'other',
+        this.sanitizeText(requirementData.title || ''),
+        this.sanitizeText(requirementData.description || ''),
+        Boolean(requirementData.is_mandatory !== false),
+        this.validateInteger(requirementData.priority, 0),
+        requirementData.skill_id || null,
+        requirementData.required_proficiency || null,
+        this.validateInteger(requirementData.min_years_experience),
+        requirementData.deliverable_format || null,
+        this.validateInteger(requirementData.expected_quantity, 1)
+      ];
 
-      return requirement;
+      const result = await this.db.query(insertQuery, values);
+      return result.rows[0];
 
     } catch (error) {
       throw new BookingError(`Failed to add requirement: ${error.message}`, 'ADD_REQUIREMENT_FAILED');
@@ -575,11 +629,16 @@ class Booking {
    */
   async getRequirements(bookingId) {
     try {
-      const requirements = Array.from(this.bookingRequirements.values())
-        .filter(req => req.booking_id === bookingId && !req.deleted_at)
-        .sort((a, b) => a.priority - b.priority);
+      if (!this.db) await this.init();
 
-      return requirements;
+      const query = `
+        SELECT * FROM booking_requirements
+        WHERE booking_id = $1 AND deleted_at IS NULL
+        ORDER BY priority ASC
+      `;
+
+      const result = await this.db.query(query, [bookingId]);
+      return result.rows;
 
     } catch (error) {
       throw new BookingError(`Failed to get requirements: ${error.message}`, 'GET_REQUIREMENTS_FAILED');
@@ -594,26 +653,35 @@ class Booking {
    */
   async addHistoryEntry(bookingId, historyData) {
     try {
+      if (!this.db) await this.init();
+
       const historyId = uuidv4();
-      const now = new Date();
 
-      const historyEntry = {
-        id: historyId,
-        booking_id: bookingId,
-        event_type: historyData.event_type,
-        from_status: historyData.from_status || null,
-        to_status: historyData.to_status || null,
-        event_title: historyData.event_title,
-        event_description: historyData.event_description || '',
-        actor_id: historyData.actor_id,
-        actor_role: historyData.actor_role || 'unknown',
-        metadata: historyData.metadata || {},
-        created_at: now,
-        updated_at: now
-      };
+      const insertQuery = `
+        INSERT INTO booking_history (
+          id, booking_id, event_type, from_status, to_status,
+          event_title, event_description, actor_id, actor_role, metadata
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+        )
+        RETURNING *
+      `;
 
-      this.bookingHistory.set(historyId, historyEntry);
-      return historyEntry;
+      const values = [
+        historyId,
+        bookingId,
+        historyData.event_type,
+        historyData.from_status || null,
+        historyData.to_status || null,
+        historyData.event_title,
+        historyData.event_description || '',
+        historyData.actor_id,
+        historyData.actor_role || 'unknown',
+        JSON.stringify(historyData.metadata || {})
+      ];
+
+      const result = await this.db.query(insertQuery, values);
+      return result.rows[0];
 
     } catch (error) {
       throw new BookingError(`Failed to add history entry: ${error.message}`, 'ADD_HISTORY_FAILED');
@@ -628,24 +696,26 @@ class Booking {
    */
   async getHistory(bookingId, options = {}) {
     try {
-      let history = Array.from(this.bookingHistory.values())
-        .filter(entry => entry.booking_id === bookingId);
+      if (!this.db) await this.init();
 
-      // Apply sorting (newest first by default)
-      const sortOrder = options.sortOrder === 'asc' ? 1 : -1;
-      history.sort((a, b) => {
-        if (a.created_at < b.created_at) return -sortOrder;
-        if (a.created_at > b.created_at) return sortOrder;
-        return 0;
-      });
+      const sortOrder = options.sortOrder === 'asc' ? 'ASC' : 'DESC';
+      const limit = options.limit ? Math.max(1, Math.min(100, options.limit)) : null;
 
-      // Apply limit if specified
-      if (options.limit) {
-        const limit = Math.max(1, Math.min(100, options.limit));
-        history = history.slice(0, limit);
+      let query = `
+        SELECT * FROM booking_history
+        WHERE booking_id = $1
+        ORDER BY created_at ${sortOrder}
+      `;
+
+      const queryParams = [bookingId];
+
+      if (limit) {
+        query += ` LIMIT $2`;
+        queryParams.push(limit);
       }
 
-      return history;
+      const result = await this.db.query(query, queryParams);
+      return result.rows;
 
     } catch (error) {
       throw new BookingError(`Failed to get booking history: ${error.message}`, 'GET_HISTORY_FAILED');
@@ -659,63 +729,99 @@ class Booking {
    */
   async getStats(criteria = {}) {
     try {
-      let bookings = Array.from(this.bookings.values()).filter(booking => !booking.deleted_at);
-      
+      if (!this.db) await this.init();
+
+      let whereConditions = ['deleted_at IS NULL'];
+      let queryParams = [];
+      let paramIndex = 1;
+
       // Apply filters if provided
       if (criteria.clientId) {
-        bookings = bookings.filter(b => b.client_id === criteria.clientId);
+        whereConditions.push(`client_id = $${paramIndex++}`);
+        queryParams.push(criteria.clientId);
       }
       if (criteria.retireeId) {
-        bookings = bookings.filter(b => b.retiree_id === criteria.retireeId);
+        whereConditions.push(`retiree_id = $${paramIndex++}`);
+        queryParams.push(criteria.retireeId);
       }
 
-      const stats = {
-        total: bookings.length,
-        byStatus: {},
-        byEngagementType: {},
-        totalValue: 0,
-        averageRate: 0
+      const whereClause = whereConditions.join(' AND ');
+
+      // Get basic stats
+      const basicStatsQuery = `
+        SELECT 
+          COUNT(*) as total,
+          COUNT(CASE WHEN status = 'request' THEN 1 END) as request_count,
+          COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count,
+          COUNT(CASE WHEN status = 'accepted' THEN 1 END) as accepted_count,
+          COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected_count,
+          COUNT(CASE WHEN status = 'active' THEN 1 END) as active_count,
+          COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered_count,
+          COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
+          COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_count
+        FROM bookings
+        WHERE ${whereClause}
+      `;
+
+      // Get engagement type stats
+      const engagementStatsQuery = `
+        SELECT 
+          engagement_type,
+          COUNT(*) as count
+        FROM bookings
+        WHERE ${whereClause}
+        GROUP BY engagement_type
+      `;
+
+      // Get rate stats
+      const rateStatsQuery = `
+        SELECT 
+          AVG(agreed_rate) as average_rate,
+          SUM(CASE 
+            WHEN agreed_rate IS NOT NULL AND estimated_hours IS NOT NULL 
+            THEN agreed_rate * estimated_hours 
+            ELSE agreed_rate 
+          END) as total_value
+        FROM bookings
+        WHERE ${whereClause} AND agreed_rate IS NOT NULL
+      `;
+
+      const [basicStats, engagementStats, rateStats] = await Promise.all([
+        this.db.query(basicStatsQuery, queryParams),
+        this.db.query(engagementStatsQuery, queryParams),
+        this.db.query(rateStatsQuery, queryParams)
+      ]);
+
+      const basic = basicStats.rows[0];
+      const engagement = engagementStats.rows;
+      const rates = rateStats.rows[0];
+
+      return {
+        total: parseInt(basic.total),
+        byStatus: {
+          request: parseInt(basic.request_count),
+          pending: parseInt(basic.pending_count),
+          accepted: parseInt(basic.accepted_count),
+          rejected: parseInt(basic.rejected_count),
+          active: parseInt(basic.active_count),
+          delivered: parseInt(basic.delivered_count),
+          completed: parseInt(basic.completed_count),
+          cancelled: parseInt(basic.cancelled_count)
+        },
+        byEngagementType: engagement.reduce((acc, row) => {
+          acc[row.engagement_type] = parseInt(row.count);
+          return acc;
+        }, {}),
+        totalValue: parseFloat(rates.total_value) || 0,
+        averageRate: parseFloat(rates.average_rate) || 0
       };
-
-      // Calculate statistics
-      let totalRateSum = 0;
-      let rateCount = 0;
-
-      for (const booking of bookings) {
-        // Count by status
-        stats.byStatus[booking.status] = (stats.byStatus[booking.status] || 0) + 1;
-        
-        // Count by engagement type
-        stats.byEngagementType[booking.engagement_type] = 
-          (stats.byEngagementType[booking.engagement_type] || 0) + 1;
-        
-        // Calculate values
-        if (booking.agreed_rate) {
-          const rate = parseFloat(booking.agreed_rate);
-          if (!isNaN(rate)) {
-            totalRateSum += rate;
-            rateCount++;
-            
-            // Estimate total value (simple calculation)
-            if (booking.estimated_hours) {
-              stats.totalValue += rate * booking.estimated_hours;
-            } else {
-              stats.totalValue += rate;
-            }
-          }
-        }
-      }
-
-      stats.averageRate = rateCount > 0 ? totalRateSum / rateCount : 0;
-
-      return stats;
 
     } catch (error) {
       throw new BookingError(`Failed to get booking statistics: ${error.message}`, 'STATS_FAILED');
     }
   }
 
-  // Utility methods
+  // Utility methods (same as original)
 
   /**
    * Sanitize text input
@@ -826,34 +932,10 @@ class Booking {
 
     return validated;
   }
-
-  /**
-   * Reset all data (for testing)
-   * @returns {Promise<void>}
-   */
-  async reset() {
-    this.bookings.clear();
-    this.bookingRequirements.clear();
-    this.bookingHistory.clear();
-    this.bookingAttachments.clear();
-  }
-}
-
-// Check if we should use database or in-memory version
-const useDatabase = process.env.DATABASE_URL || process.env.NODE_ENV === 'production';
-
-let bookingInstance;
-if (useDatabase) {
-  // Use PostgreSQL version
-  const { BookingDB } = require('./BookingDB');
-  bookingInstance = BookingDB;
-} else {
-  // Use in-memory version for development/testing
-  bookingInstance = new Booking();
 }
 
 // Export singleton instance
 module.exports = {
-  Booking: bookingInstance,
+  BookingDB: new BookingDB(),
   BookingError
 };
