@@ -11,6 +11,8 @@
     "test:coverage": "node --max-old-space-size=4096 ./node_modules/.bin/jest --coverage"
   },
   "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "axios": "^1.11.0",
     "bcrypt": "^5.1.0",
     "cors": "^2.8.5",
