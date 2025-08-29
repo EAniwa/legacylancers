@@ -5,14 +5,14 @@
 
 const express = require('express');
 const { calendarController } = require('../../controllers/calendar');
-const { authMiddleware } = require('../../middleware/auth');
+const { authenticate } = require('../../middleware/auth');
 const { rateLimitMiddleware } = require('../../middleware/rateLimit');
 const { validationMiddleware, calendarValidation } = require('../../middleware/validation');
 
 const router = express.Router();
 
 // Apply authentication to all calendar routes
-router.use(authMiddleware);
+router.use(authenticate);
 
 // Apply rate limiting (higher limits for calendar operations)
 router.use(rateLimitMiddleware({ 
